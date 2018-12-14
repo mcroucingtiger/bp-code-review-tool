@@ -1,7 +1,7 @@
 import json
 
 
-class ReportHelper:
+class ReportPageHelper:
     """"
     Helper class to categorise all error cases found into a topics (list) > topic (dict) > considerations (list)
     > consideration (dict) > errors (list) > error (dict) structure
@@ -43,5 +43,9 @@ class ReportHelper:
             add_topic = {"Topic Name": topic_name, "Considerations": []}
             self.topics.append(add_topic)
 
-    def get_report_json(self):
+    # This probably wont be necessary depending on how JSON output is
+    def get_report_json(self) -> str:
         return json.dumps(self.topics)
+    # Instead use this one and JSON the entire list
+    def get_topics_list(self):
+        return self.topics

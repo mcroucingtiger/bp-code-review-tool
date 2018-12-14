@@ -1,16 +1,42 @@
 import logging
 from bs4 import BeautifulSoup
-from SharedCode.ReportHelper import *
+from bs4 import SoupStrainer
+from SharedCode.ReportPageHelper import *
+from SharedCode.UseOfAttach import *
 
+print("Local testing page started")
+
+def has_attr_bpversion(tag):
+    """Only Objects have an attribute called bpversion. This filter function should return all the Object tags"""
+    return tag.has_attr('bpversion')
+
+def get_local_xml_soup() -> BeautifulSoup:
+    infile = open("Lots of shit now.bprelease", "r")
+    contents = infile.read()
+
+    print('\nObjects:')
+    only_objects = SoupStrainer('object', xmlns=True)
+    soup_objects = BeautifulSoup(contents, 'lxml', parse_only=only_objects)
+    for object_tag in soup_objects.contents:
+        print(object_tag.get('name'))
+
+    print('\nProcesses:')
+    only_processes = SoupStrainer('process', xmlns=True)
+    soup_processes = BeautifulSoup(contents, 'lxml', parse_only=only_processes)
+    for process_tag in soup_processes.contents:
+        print(process_tag.get('name'))
+
+    print('\nQueue:')
+    only_work_queue = SoupStrainer('work-queue', xmlns=True)
+    soup_queue = BeautifulSoup(contents, 'lxml', parse_only=only_work_queue)
+    for queue_tag in soup_queue.contents:
+        print(queue_tag.get('name'))
 
 def check_system_exceptions():
     error_list = []
     logging.info("'Check System Exception' function called")
-    # Loading and parsing XML locally (D.A.T)
-    infile = open("BPA Object - Kwik Surverys - General.xml", "r")
-    contents = infile.read()
-    soup = BeautifulSoup(contents, 'lxml')
 
+    soup = get_local_xml_soup()
     # Finding the 'exception stage name' and 'page name' for all exception stages with empty an exception detail field
     exception_stages = soup.find_all('exception')
 
@@ -34,9 +60,9 @@ def check_system_exceptions():
         print("Exception stage '%s' on page '%s' is missing an Exception Detail."
                      % (error["Exception name"], error["Exception page"]))
 
-
 def tester_json2():
-    rh = ReportHelper()
+    print("sorry?")
+    rh = ReportPageHelper()
     topic = "Exception Handling"
     consideration = "Exception Message not exist"''
     rh.set_topic(topic)
@@ -71,7 +97,18 @@ def tester_json2():
     output_json = rh.get_report_json()
     print(output_json)
 
+def attach_action_test():
+    attach_found = False
+    soup = get_local_xml_soup()
+    subsheets = soup.find_all('subsheet')  # Find all page names
+    for subsheet in subsheets:
+        if subsheet.contents[1].string.lower().find("attach") >= 0:  # A page has the work 'Attach' in it
+            attach_found = True
 
-tester_json2()
+
+
+get_local_xml_soup()
+
+
 
 
