@@ -8,29 +8,28 @@ import os
 from collections import namedtuple
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'SharedCode')))
 from ReportPageHelper import ReportPageHelper
-from ExceptionHandling import check_exception_details
+from GeneralConsiderations import check_exception_details
 
 # logging.critical .error .warning .info .debug
 logging.info("__init__ page running")
 Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues')
 
 
-def main(): #req: func.HttpRequest) -> func.HttpResponse:
+def main(req: func.HttpRequest) -> func.HttpResponse:
     print("Main running")
-    # xml_string = ''
+    xml_string = ''
     report_pages = []
-    # logging.info("Python HTTP trigger function processed a request.")
-    #
-    # try:
-    #     req_body = req.get_body()
-    #     xml_string = req_body
-    # except ValueError:
-    #     logging.error("Unable to access request body")
-    #     pass
+    logging.info("Python HTTP trigger function processed a request.")
+
+    try:
+        req_body = req.get_body()
+        xml_string = req_body
+    except ValueError:
+        logging.error("Unable to access request body")
+        pass
 
     # # Testing only
     # release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/SharedCode/Multi-Object_Process.bprelease"
-    #
     # infile = open(release_path, "r")
     # xml_string = infile.read()
 
@@ -48,7 +47,7 @@ def main(): #req: func.HttpRequest) -> func.HttpResponse:
         json_ob = json.dumps(report_pages)
         print(json_ob)
 
-        return func.HttpResponse()
+        return func.HttpResponse(json_ob)
 
     else:
         return func.HttpResponse(
@@ -87,6 +86,7 @@ def make_report_process(process_soup):
 
 def make_report_object(object_soup):
     """Uses the filtered soup of a single object tag element to generate the JSON for a page in the report """
+    logging.info("Running Make Report Object function")
     report_helper = ReportPageHelper()
     report_helper.set_page_type('Object', object_soup)
 
@@ -95,5 +95,4 @@ def make_report_object(object_soup):
 
     return report_helper.get_report_page()
 
-# main()
 

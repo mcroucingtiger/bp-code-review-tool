@@ -2,16 +2,13 @@ from bs4 import BeautifulSoup
 import logging
 from ReportPageHelper import ReportPageHelper
 
-TOPIC_NAME = 'Use of Attach'
-
 
 def check_business_obj_has_attach(soup: BeautifulSoup, report_helper: ReportPageHelper):
     CONSIDERATION_NAME = "Does the Business Object have an 'Attach' Action that reads " \
                          "the connected status before Attaching?"
 
     logging.info("'Check System Exception' function called")
-    report_helper.set_topic(TOPIC_NAME)
-    report_helper.set_consideration(TOPIC_NAME, CONSIDERATION_NAME)
+    report_helper.set_consideration(CONSIDERATION_NAME)
 
     attach_found = False
     subsheets = soup.find_all('subsheet')  # Find all page names
@@ -19,14 +16,13 @@ def check_business_obj_has_attach(soup: BeautifulSoup, report_helper: ReportPage
         if subsheet.contents[1].string.lower().find("attach") >= 0:  # A page has the work 'Attach' in it
             attach_found = True
 
-    if attach_found == False:  #TODO pick up from here
-        report_helper.set_error(TOPIC_NAME, CONSIDERATION_NAME, "Unable to find and an Attach page within the Object"
+    if attach_found == False:  #TODO pick up from here (Exception page)
+        report_helper.set_error(CONSIDERATION_NAME, "Unable to find and an Attach page within the Object"
                                 , exception_page)
 
 def check_actions_use_attach(soup: BeautifulSoup, report_helper: ReportPageHelper):
     CONSIDERATION_NAME = "Do all Actions use the Attach action?"
 
     logging.info("'Check System Exception' function called")
-    report_helper.set_topic(TOPIC_NAME)
-    report_helper.set_consideration(TOPIC_NAME, CONSIDERATION_NAME)
+    report_helper.set_consideration(CONSIDERATION_NAME)
 

@@ -2,7 +2,7 @@ import logging
 from bs4 import BeautifulSoup
 from bs4 import SoupStrainer
 from SharedCode.ReportPageHelper import *
-from SharedCode.UseOfAttach import *
+from SharedCode.ObjectConsiderations import *
 
 print("Local testing page started")
 release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/SharedCode/Multi-Object_Process.bprelease"
