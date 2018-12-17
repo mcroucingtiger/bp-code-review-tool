@@ -5,13 +5,14 @@ from SharedCode.ReportPageHelper import *
 from SharedCode.UseOfAttach import *
 
 print("Local testing page started")
+release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/SharedCode/Multi-Object_Process.bprelease"
 
 def has_attr_bpversion(tag):
     """Only Objects have an attribute called bpversion. This filter function should return all the Object tags"""
     return tag.has_attr('bpversion')
 
 def get_local_xml_soup() -> BeautifulSoup:
-    infile = open("Lots of shit now.bprelease", "r")
+    infile = open(release_path, "r")
     contents = infile.read()
 
     print('\nObjects:')
@@ -31,6 +32,8 @@ def get_local_xml_soup() -> BeautifulSoup:
     soup_queue = BeautifulSoup(contents, 'lxml', parse_only=only_work_queue)
     for queue_tag in soup_queue.contents:
         print(queue_tag.get('name'))
+
+    return soup_objects
 
 def check_system_exceptions():
     error_list = []
@@ -97,6 +100,7 @@ def tester_json2():
     output_json = rh.get_report_json()
     print(output_json)
 
+
 def attach_action_test():
     attach_found = False
     soup = get_local_xml_soup()
@@ -106,8 +110,25 @@ def attach_action_test():
             attach_found = True
 
 
+def set_actions(object_soup: BeautifulSoup):
+    actions = object_soup.find_all("subsheet")
+    print("\n---\n")
+    for action in actions:
+        print(action.next_element.string)
+    pass
 
-get_local_xml_soup()
+
+def get_name(object_soup):
+    print("\n---\n")
+    print(object_soup.contents[0].get('name'))
+
+
+
+
+get_name(get_local_xml_soup())
+
+
+
 
 
 

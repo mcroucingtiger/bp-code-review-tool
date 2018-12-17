@@ -2,6 +2,7 @@ import logging
 import azure.functions as func
 from bs4 import BeautifulSoup
 from bs4 import SoupStrainer
+import json
 import sys
 import os
 from collections import namedtuple
@@ -14,28 +15,40 @@ logging.info("__init__ page running")
 Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues')
 
 
-def main(req: func.HttpRequest) -> func.HttpResponse:
-    xml_string = ''
-    report_pages = []  #TODO Check this actually converts into a JSON
-    logging.info("Python HTTP trigger function processed a request.")
+def main(): #req: func.HttpRequest) -> func.HttpResponse:
+    print("Main running")
+    # xml_string = ''
+    report_pages = []
+    # logging.info("Python HTTP trigger function processed a request.")
+    #
+    # try:
+    #     req_body = req.get_body()
+    #     xml_string = req_body
+    # except ValueError:
+    #     logging.error("Unable to access request body")
+    #     pass
 
-    try:
-        req_body = req.get_body()
-        xml_string = req_body
-    except ValueError:
-        logging.error("Unable to access request body")
-        pass
+    # # Testing only
+    # release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/SharedCode/Multi-Object_Process.bprelease"
+    #
+    # infile = open(release_path, "r")
+    # xml_string = infile.read()
+
     if xml_string:  # Happy path :)
+        # TODO make sure this shit works
         sub_soups = make_soups(xml_string)
         for process_tag in sub_soups.processes.contents:
-            report_page = make_report_process(process_tag)
-            report_pages.append(report_page)
+            report_page_dict = make_report_process(process_tag)
+            report_pages.append(report_page_dict)
 
         for object_tag in sub_soups.objects.contents:
-            report_page = make_report_object(object_tag)
-            report_pages.append(report_page)
+            report_page_dict = make_report_object(object_tag)
+            report_pages.append(report_page_dict)
 
-        return func.HttpResponse()#report_helper.get_report_json())
+        json_ob = json.dumps(report_pages)
+        print(json_ob)
+
+        return func.HttpResponse()
 
     else:
         return func.HttpResponse(
@@ -64,20 +77,23 @@ def make_soups(xml_string) -> Sub_Soup:
 def make_report_process(process_soup):
     """Uses the filtered soup of a single process tag element to generate the JSON for a page in the report """
     report_helper = ReportPageHelper()
+    report_helper.set_page_type('Process', process_soup)
 
     # All modules intended for creating a process specific page in the report
     check_exception_details(process_soup, report_helper)
-    return report_helper.get_topics_list()
+
+    return report_helper.get_report_page()
 
 
 def make_report_object(object_soup):
     """Uses the filtered soup of a single object tag element to generate the JSON for a page in the report """
     report_helper = ReportPageHelper()
+    report_helper.set_page_type('Object', object_soup)
 
     # All modules intended for creating a object specific page in the report
     check_exception_details(object_soup, report_helper)
-    return report_helper.get_topics_list()
 
+    return report_helper.get_report_page()
 
-
+# main()
 
