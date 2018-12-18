@@ -40,7 +40,6 @@ class ReportPageHelper:
             self.actions.append(action.next_element.string)
         logging.info("Action names from BP Object extracted")
 
-    # TODO create a more pythonic implementation
     def set_error(self, consideration_name, error_name, error_location):
         """Adds the error to the relevant topic and consideration"""
         error = {'Error': error_name, 'Error Location': error_location}
