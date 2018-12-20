@@ -1,13 +1,17 @@
 from bs4 import SoupStrainer
-from SharedCode.ReportPageHelper import *
+from SharedCode.ReportPageHelper import ReportPageHelper as RH
 from SharedCode.Considerations.ObjectConsiderations import *
+import json
+from collections import namedtuple
 
 print("Local testing page started")
-release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/SharedCode/Multi-Object_Process.bprelease"
+release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
+Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues')
 
 def has_attr_bpversion(tag):
     """Only Objects have an attribute called bpversion. This filter function should return all the Object tags"""
     return tag.has_attr('bpversion')
+
 
 def get_local_xml_soup() -> BeautifulSoup:
     infile = open(release_path, "r")
@@ -32,6 +36,20 @@ def get_local_xml_soup() -> BeautifulSoup:
         print(queue_tag.get('name'))
 
     return soup_objects
+
+def make_soups(xml_string) -> Sub_Soup:
+    """Turns the xml into a named tuple of BeautifulSoup objects for all processes, objects and queues"""
+    # Look at Local testing script to see how access names
+    only_objects = SoupStrainer('object', xmlns=True)
+    soup_objects = BeautifulSoup(xml_string, 'lxml', parse_only=only_objects)
+
+    only_processes = SoupStrainer('process', xmlns=True)
+    soup_processes = BeautifulSoup(xml_string, 'lxml', parse_only=only_processes)
+
+    only_work_queue = SoupStrainer('work-queue', xmlns=True)
+    soup_queue = BeautifulSoup(xml_string, 'lxml', parse_only=only_work_queue)
+
+    return Sub_Soup(soup_processes, soup_objects, soup_queue)
 
 def check_system_exceptions():
     error_list = []
@@ -121,9 +139,39 @@ def get_name(object_soup):
     print(object_soup.contents[0].get('name'))
 
 
+def check_business_obj_has_attach(soup: BeautifulSoup, report_helper: ReportPageHelper):
+    logging.info("'Check Business Obj Has Attach' function called")
+    report_helper.set_consideration(ConsiderationsList.CHECK_OBJ_HAS_ATTACH)
+
+    attach_found = False
+    subsheets = soup.find_all('subsheet')  # Find all page names
+    for subsheet in subsheets:
+        if subsheet.next_element.string.lower().find("attach") >= 0:  # A page has the work 'Attach' in it
+            attach_found = True
+            break
+
+    if not attach_found:
+        report_helper.set_error(ConsiderationsList.CHECK_OBJ_HAS_ATTACH,
+                                "Unable to find and an Attach page within the Object")
+
+def check_actions_use_attach(soup: BeautifulSoup, report_helper: ReportPageHelper):
+    logging.info("'Check System Exception' function called")
+    report_helper.set_consideration(ConsiderationsList.CHECK_ACTIONS_USE_ATTACH)
+
+    
 
 
-get_name(get_local_xml_soup())
+sub_group = make_soups(get_local_xml_soup())
+for soup_object in sub_group.objects:
+    check_business_obj_has_attach(soup_object, RH())
+
+
+
+
+
+
+
+
 
 
 
