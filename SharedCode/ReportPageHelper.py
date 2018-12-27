@@ -1,6 +1,16 @@
-import json
 from bs4 import BeautifulSoup
 import logging
+
+
+class Result:
+    """Result is a column in both the Object and Process report page.
+    This Class is similar to an enum, to help clarify their use as parameters"""
+
+    NO = 'NO'
+    YES = 'Yes'
+    FREQUENTLY = 'Frequently'
+    INFREQUENTLY = 'Infrequently'
+    NOT_APPLICABLE = 'Not Applicable'
 
 
 class ReportPageHelper:
@@ -40,17 +50,22 @@ class ReportPageHelper:
             self.actions.append(action.next_element.string)
         logging.info("Action names from BP Object extracted")
 
-    def set_error(self, consideration_name, error_name, error_location):
+    def set_error(self, consideration_name, error: dict):
         """Adds the error to the relevant topic and consideration"""
-        error = {'Error': error_name, 'Error Location': error_location}
         for consideration in self.considerations:
             if consideration["Consideration Name"] == consideration_name:  # Checking consideration list
                 consideration['Errors'].append(error)
                 break
 
-    def set_consideration(self, consideration_name):
+    def set_consideration(self, consideration_name, max_score):
         """Creates a consideration dict containing an errors list"""
-        self.considerations.append({"Consideration Name": consideration_name, "Errors": []})
+        self.considerations.append({"Consideration Name": consideration_name, "Errors": [],
+                                    'Max Score': max_score, 'Score': 10})
+
+    def set_consideration_score(self, consideration_name, score):
+        for consideration in self.considerations:
+            if consideration["Consideration Name"] == consideration_name:
+                consideration['Score'] = score
 
     def get_report_page(self) -> dict:
         """Returns a dict containing the report page information, considerations and their corresponding error data"""
@@ -60,3 +75,8 @@ class ReportPageHelper:
             "Object Actions": self.actions,
             "Report Considerations": self.considerations
         }
+
+
+def error_as_dict(error_name, error_location):
+    return {'Error Name': error_name, 'Error Location': error_location}
+

@@ -9,6 +9,8 @@ from collections import namedtuple
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from SharedCode.ReportPageHelper import ReportPageHelper
 from SharedCode.Considerations.GeneralConsiderations import check_exception_details
+from SharedCode.Considerations.ObjectConsiderations import check_obj_has_attach
+from SharedCode.Considerations.ConsiderationsList import *
 
 
 # logging.critical .error .warning .info .debug
@@ -16,25 +18,27 @@ logging.info("__init__ page running")
 Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues')
 
 
-def main(req: func.HttpRequest) -> func.HttpResponse:
+def main():#req: func.HttpRequest) -> func.HttpResponse:
     print("Main running")
     xml_string = ''
     report_pages = []
     logging.info("Python HTTP trigger function processed a request.")
 
-    try:
-        req_body = req.get_body()
-        xml_string = req_body
-    except ValueError:
-        logging.error("Unable to access request body")
-        pass
+    # try:
+    #     req_body = req.get_body()
+    #     xml_string = req_body
+    # except ValueError:
+    #     logging.error("Unable to access request body")
+    #     pass
 
     # Testing only
-    # release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/SharedCode/Multi-Object_Process.bprelease"
-    # infile = open(release_path, "r")
-    # xml_string = infile.read()
+    release_path = "C:/Users/MorganCrouch/Desktop/testing Release.bprelease"
+    infile = open(release_path, "r")
+    xml_string = infile.read()
+
     if xml_string:  # If the XML was able to be extracted from HTTP, it gets parsed into a BeautifulSoup Obj
         sub_soups = make_soups(xml_string)
+
         for process_tag in sub_soups.processes.contents:
             report_page_dict = make_report_process(process_tag)
             report_pages.append(report_page_dict)
@@ -43,10 +47,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             report_page_dict = make_report_object(object_tag)
             report_pages.append(report_page_dict)
 
-        json_ob = json.dumps(report_pages)
-        print(json_ob)
+        json_report = json.dumps(report_pages)
+        print(json_report)
 
-        return func.HttpResponse(json_ob)
+        return func.HttpResponse(json_report)
 
     else:
         return func.HttpResponse(
@@ -73,10 +77,8 @@ def make_soups(xml_string) -> Sub_Soup:
 def make_report_process(process_soup):
     """Uses the filtered soup of a single process tag element to generate the JSON for a page in the report"""
     report_helper = ReportPageHelper()
-    report_helper.set_page_type('Process', process_soup)
 
-    # All modules intended for creating a process specific page in the report
-    check_exception_details(process_soup, report_helper)
+    # TODO fill out process side
 
     return report_helper.get_report_page()
 
@@ -88,8 +90,21 @@ def make_report_object(object_soup):
     report_helper.set_page_type('Object', object_soup)
 
     # All modules intended for creating a object specific page in the report
-    check_exception_details(object_soup, report_helper)
+
+    errors = check_exception_details(object_soup)
+    report_helper.set_consideration(CHECK_EXCEPTION_DETAILS.value, CHECK_EXCEPTION_DETAILS.max_score)
+    if errors:
+        report_helper.set_consideration_score(CHECK_EXCEPTION_DETAILS.value, score=0)
+    for error in errors:
+        report_helper.set_error(CHECK_EXCEPTION_DETAILS.value, error)
+
+    errors = check_obj_has_attach(object_soup)
+    report_helper.set_consideration(CHECK_OBJ_HAS_ATTACH.value, CHECK_OBJ_HAS_ATTACH.max_score)
+    if errors:
+        report_helper.set_consideration_score(CHECK_OBJ_HAS_ATTACH.value, score=0)
+    for error in errors:
+        report_helper.set_error(CHECK_OBJ_HAS_ATTACH.value, error)
 
     return report_helper.get_report_page()
 
-
+main()

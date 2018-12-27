@@ -1,13 +1,19 @@
 from bs4 import BeautifulSoup
 import logging
-from SharedCode import ReportPageHelper
-from SharedCode.Considerations import ConsiderationsList
+from SharedCode.ReportPageHelper import ReportPageHelper
+from SharedCode.Considerations.ConsiderationsList import *
+from SharedCode.ReportPageHelper import error_as_dict
+"""
+
+Functions to find the errors for the considerations in the Object Report page.
+All functions should take in a soup and return a list of error objects
+
+ """
 
 
-def check_obj_has_attach(soup: BeautifulSoup, report_helper: ReportPageHelper):
+def check_obj_has_attach(soup: BeautifulSoup) -> list:
     logging.info("'Check Business Obj Has Attach' function called")
-    report_helper.set_consideration(ConsiderationsList.CHECK_OBJ_HAS_ATTACH)
-
+    errors = []
     attach_found = False
     subsheets = soup.find_all('subsheet')  # Find all page names
     for subsheet in subsheets:
@@ -16,8 +22,9 @@ def check_obj_has_attach(soup: BeautifulSoup, report_helper: ReportPageHelper):
             break
 
     if not attach_found:
-        report_helper.set_error(ConsiderationsList.CHECK_OBJ_HAS_ATTACH,
-                                "Unable to find and an Attach page within the Object")
+        errors.append(error_as_dict("Unable to find and an Attach page within the Object", "N/A"))
+
+    return errors
 
 
 def check_actions_use_attach(soup: BeautifulSoup, report_helper: ReportPageHelper):
@@ -25,5 +32,5 @@ def check_actions_use_attach(soup: BeautifulSoup, report_helper: ReportPageHelpe
 
 
     logging.info("'Check System Exception' function called")
-    report_helper.set_consideration(ConsiderationsList.CHECK_ACTIONS_USE_ATTACH)
+    report_helper.set_consideration(CHECK_ACTIONS_USE_ATTACH)
 
