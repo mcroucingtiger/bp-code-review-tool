@@ -3,13 +3,10 @@ import logging
 from SharedCode.ReportPageHelper import ReportPageHelper
 from SharedCode.Considerations.ConsiderationsList import *
 from SharedCode.ReportPageHelper import error_as_dict
-"""
+"""Functions to find the errors for the considerations in the Object Report page.
 
-Functions to find the errors for the considerations in the Object Report page.
 All functions should take in a soup and return a list of error objects
-
  """
-
 
 def check_obj_has_attach(soup: BeautifulSoup) -> list:
     logging.info("'Check Business Obj Has Attach' function called")

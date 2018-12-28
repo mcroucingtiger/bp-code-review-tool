@@ -5,7 +5,17 @@ from SharedCode.Considerations import ConsiderationsList
 
 
 def check_exception_details(soup: BeautifulSoup):
-    """Check to ensure all Exception stages do not contain blank exception details"""
+    """Check to ensure all Exception stages do not contain blank exception details.
+
+    Finds all the exception tags in the XML. From there, filters for the details of each
+    exception to check if it is blank. Excludes preserve exceptions.
+
+    Args:
+        soup: A beautiful soup instance.
+
+    Returns:
+        A list of dict objects of each error.
+    """
     errors = []
     logging.info("'Check Exception Detail function called")
 

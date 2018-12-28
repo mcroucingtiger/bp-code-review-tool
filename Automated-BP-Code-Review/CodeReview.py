@@ -7,7 +7,7 @@ import sys
 from os import path
 from collections import namedtuple
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-from SharedCode.ReportPageHelper import ReportPageHelper
+from SharedCode.ReportPageHelper import ReportPageHelper, Result
 from SharedCode.Considerations.GeneralConsiderations import check_exception_details
 from SharedCode.Considerations.ObjectConsiderations import check_obj_has_attach
 from SharedCode.Considerations.ConsiderationsList import *
@@ -75,16 +75,16 @@ def make_soups(xml_string) -> Sub_Soup:
 
 
 def make_report_process(process_soup):
-    """Uses the filtered soup of a single process tag element to generate the JSON for a page in the report"""
+    """Use the filtered soup of a single process tag element to generate the JSON for a page in the report."""
     report_helper = ReportPageHelper()
 
-    # TODO fill out process side
+    # TODO: fill out process side
 
     return report_helper.get_report_page()
 
 
 def make_report_object(object_soup):
-    """Uses the filtered soup of a single object tag element to generate the JSON for a page in the report"""
+    """Use the filtered soup of a single object tag element to generate the JSON for a page in the report."""
     logging.info("Running Make Report Object function")
     report_helper = ReportPageHelper()
     report_helper.set_page_type('Object', object_soup)
@@ -94,17 +94,20 @@ def make_report_object(object_soup):
     errors = check_exception_details(object_soup)
     report_helper.set_consideration(CHECK_EXCEPTION_DETAILS.value, CHECK_EXCEPTION_DETAILS.max_score)
     if errors:
-        report_helper.set_consideration_score(CHECK_EXCEPTION_DETAILS.value, score=0)
+        report_helper.set_consideration_score(CHECK_EXCEPTION_DETAILS.value, score=0, result=Result.NO)
+        # TODO: Find better better way to score here. Should be a scaling factor of max_score
     for error in errors:
         report_helper.set_error(CHECK_EXCEPTION_DETAILS.value, error)
 
     errors = check_obj_has_attach(object_soup)
     report_helper.set_consideration(CHECK_OBJ_HAS_ATTACH.value, CHECK_OBJ_HAS_ATTACH.max_score)
     if errors:
-        report_helper.set_consideration_score(CHECK_OBJ_HAS_ATTACH.value, score=0)
+        report_helper.set_consideration_score(CHECK_OBJ_HAS_ATTACH.value, score=0, result=Result.NO)
     for error in errors:
         report_helper.set_error(CHECK_OBJ_HAS_ATTACH.value, error)
 
     return report_helper.get_report_page()
+
+
 
 main()

@@ -1,5 +1,6 @@
 from collections import namedtuple
 """List of All considerations used in reporting"""
+
 Consideration = namedtuple('Consideration', 'value, max_score')
 # General Considerations
 CHECK_EXCEPTION_DETAILS = Consideration(value="Do all Exception stages have an exception detail? ", max_score=10)
