@@ -8,8 +8,9 @@ from SharedCode.ReportPageHelper import error_as_dict
 All functions should take in a soup and return a list of error objects
  """
 
+
 def check_obj_has_attach(soup: BeautifulSoup) -> list:
-    logging.info("'Check Business Obj Has Attach' function called")
+    logging.info("check_obj_has_attach function called")
     errors = []
     attach_found = False
     subsheets = soup.find_all('subsheet')  # Find all page names

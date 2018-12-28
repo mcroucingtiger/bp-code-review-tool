@@ -7,7 +7,7 @@ class Result:
 
     This Class is similar to an enum, to help clarify their use as parameters
     """
-    NO = 'NO'
+    NO = 'No'
     YES = 'Yes'
     FREQUENTLY = 'Frequently'
     INFREQUENTLY = 'Infrequently'
