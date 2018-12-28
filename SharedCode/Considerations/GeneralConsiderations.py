@@ -1,32 +1,43 @@
 import logging
 from bs4 import BeautifulSoup  # Note that lxml has a external c depedency
-from SharedCode.ReportPageHelper import ReportPageHelper, error_as_dict
-from SharedCode.Considerations import ConsiderationsList
+from SharedCode.ReportPageHelper import ReportPageHelper, error_as_dict, Result
+from SharedCode.Considerations.Consideration import Consideration
 
 
-def check_exception_details(soup: BeautifulSoup):
-    """Check to ensure all Exception stages do not contain blank exception details.
+class CheckExceptionDetails(Consideration):
+    def __init__(self):
+        super().__init__()
+        self.value = "Do all Exception stages have an exception detail? "
 
-    Finds all the exception tags in the XML. From there, filters for the details of each
-    exception to check if it is blank. Excludes preserve exceptions.
+    def check_consideration(self, soup: BeautifulSoup) -> list:
+        logging.info("'CheckExceptionDetail method called")
 
-    Args:
-        soup: A beautiful soup instance.
+        # Finding the 'exception stage name' and 'page name' for all exception stages
+        # with empty an exception detail field
+        exception_stages = soup.find_all('exception')
+        for exception_stage in exception_stages:
+            if not exception_stage.get('detail') and not exception_stage.get(
+                    'usecurrent'):  # No detail and not preserve
+                exception_name = exception_stage.parent.get('name')
+                parent_subsheet_id = exception_stage.parent.subsheetid.string
+                exception_page = soup.find('subsheet', {'subsheetid': parent_subsheet_id}).next_element.string
 
-    Returns:
-        A list of dict objects of each error.
-    """
-    errors = []
-    logging.info("'Check Exception Detail function called")
+                self.errors.append(error_as_dict(exception_name, exception_page))
 
-    # Finding the 'exception stage name' and 'page name' for all exception stages with empty an exception detail field
-    exception_stages = soup.find_all('exception')
-    for exception_stage in exception_stages:
-        if not exception_stage.get('detail') and not exception_stage.get('usecurrent'):  # No detail and not preserve
-            exception_name = exception_stage.parent.get('name')
-            parent_subsheet_id = exception_stage.parent.subsheetid.string
-            exception_page = soup.find('subsheet', {'subsheetid': parent_subsheet_id}).next_element.string
+    def evaluate_consideration(self):
+        """Calculate the consideration's score and result. Default value is hard fail {score: 0, result: No}."""
+        if self.errors:
+            if len(self.errors) < 2:
+                self.score = self.max_score * 0.7
+                self.result = Result.FREQUENTLY
+            elif 2 < len(self.errors) < 4:
+                self.score = self.max_score * 0.3
+                self.result = Result.INFREQUENTLY
+            else:
+                self.score = 0
+                self.result = Result.NO
 
-            errors.append(error_as_dict(exception_name, exception_page))
+    def add_consideration(self, report_helper):
+        super().add_consideration(report_helper)
 
-    return errors
+

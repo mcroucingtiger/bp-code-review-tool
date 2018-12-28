@@ -8,8 +8,8 @@ from os import path
 from collections import namedtuple
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from SharedCode.ReportPageHelper import ReportPageHelper, Result
-from SharedCode.Considerations.GeneralConsiderations import check_exception_details
-from SharedCode.Considerations.ObjectConsiderations import check_obj_has_attach
+from SharedCode.Considerations.GeneralConsiderations import CheckExceptionDetails
+from SharedCode.Considerations.ObjectConsiderations import CheckObjHasAttach
 from SharedCode.Considerations.ConsiderationsList import *
 
 
@@ -94,24 +94,18 @@ def make_report_object(object_soup):
     # All modules intended for creating a object specific page in the report.
     # If statements are for the scoring of individual modules that any errors.
 
-    errors = check_exception_details(object_soup)
-    set_consideration_and_errors(report_helper, CHECK_EXCEPTION_DETAILS, errors)
-    if errors:
-        report_helper.set_consideration_score(CHECK_EXCEPTION_DETAILS.value, score=0, result=Result.NO)
+    # TODO: Implement this way
+    object_considerations = [CheckExceptionDetails(), CheckObjHasAttach()]
 
-    errors = check_obj_has_attach(object_soup)
-    set_consideration_and_errors(report_helper, CHECK_OBJ_HAS_ATTACH, errors)
-    if errors:
-        report_helper.set_consideration_score(CHECK_OBJ_HAS_ATTACH.value, score=0, result=Result.NO)
+    for consideration in object_considerations:
+        consideration.check_consideration(object_soup)
+        consideration.evaluate_consideration()
+        consideration.add_consideration(report_helper)
 
     return report_helper.get_report_page()
 
 
-def set_consideration_and_errors(report_helper, consideration_tuple, errors):
-    """Sets the consideration and its errors within the the report_helper's considerations list"""
-    report_helper.set_consideration(consideration_tuple.value, consideration_tuple.max_score)
-    for error in errors:
-        report_helper.set_error(CHECK_OBJ_HAS_ATTACH.value, error)
+
 
 
 main()

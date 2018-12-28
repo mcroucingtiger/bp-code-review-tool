@@ -14,6 +14,13 @@ class Result:
     NOT_APPLICABLE = 'Not Applicable'
 
 
+class Impact:
+    None_ = 'None'  # Underscore as keyword
+    HIGH = 'High'
+    MEDIUM = 'Medium'
+    LOW = 'Low'
+
+
 class ReportPageHelper:
     """"Helper class to manage a report page.
 
