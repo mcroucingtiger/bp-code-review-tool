@@ -77,6 +77,8 @@ def make_soups(xml_string) -> Sub_Soup:
 def make_report_process(process_soup):
     """Use the filtered soup of a single process tag element to generate the JSON for a page in the report."""
     report_helper = ReportPageHelper()
+    report_helper.set_page_type('Process', process_soup)
+    logging.info("Running make_report_process function for " + report_helper.page_name)
 
     # TODO: fill out process side
 
@@ -85,29 +87,31 @@ def make_report_process(process_soup):
 
 def make_report_object(object_soup):
     """Use the filtered soup of a single object tag element to generate the JSON for a page in the report."""
-    logging.info("Running Make Report Object function")
     report_helper = ReportPageHelper()
     report_helper.set_page_type('Object', object_soup)
+    logging.info("Running make_report_object function for " + report_helper.page_name)
 
-    # All modules intended for creating a object specific page in the report
+    # All modules intended for creating a object specific page in the report.
+    # If statements are for the scoring of individual modules that any errors.
 
     errors = check_exception_details(object_soup)
-    report_helper.set_consideration(CHECK_EXCEPTION_DETAILS.value, CHECK_EXCEPTION_DETAILS.max_score)
+    set_consideration_and_errors(report_helper, CHECK_EXCEPTION_DETAILS, errors)
     if errors:
         report_helper.set_consideration_score(CHECK_EXCEPTION_DETAILS.value, score=0, result=Result.NO)
-        # TODO: Find better better way to score here. Should be a scaling factor of max_score
-    for error in errors:
-        report_helper.set_error(CHECK_EXCEPTION_DETAILS.value, error)
 
     errors = check_obj_has_attach(object_soup)
-    report_helper.set_consideration(CHECK_OBJ_HAS_ATTACH.value, CHECK_OBJ_HAS_ATTACH.max_score)
+    set_consideration_and_errors(report_helper, CHECK_OBJ_HAS_ATTACH, errors)
     if errors:
         report_helper.set_consideration_score(CHECK_OBJ_HAS_ATTACH.value, score=0, result=Result.NO)
-    for error in errors:
-        report_helper.set_error(CHECK_OBJ_HAS_ATTACH.value, error)
 
     return report_helper.get_report_page()
 
+
+def set_consideration_and_errors(report_helper, consideration_tuple, errors):
+    """Sets the consideration and its errors within the the report_helper's considerations list"""
+    report_helper.set_consideration(consideration_tuple.value, consideration_tuple.max_score)
+    for error in errors:
+        report_helper.set_error(CHECK_OBJ_HAS_ATTACH.value, error)
 
 
 main()
