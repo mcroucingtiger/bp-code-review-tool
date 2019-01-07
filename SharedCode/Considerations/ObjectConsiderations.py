@@ -8,9 +8,9 @@ from SharedCode.Considerations.Consideration import Consideration
 
 class CheckObjHasAttach(Consideration):
     def __init__(self):
-        super().__init__()
-        self.value = "Does the Business Object have an 'Attach' Action " \
-                     "that reads the connected status before Attaching?"
+        CONSIDERATION_VALUE = "Does the Business Object have an 'Attach' Action " \
+                              "that reads the connected status before Attaching?"
+        super().__init__(CONSIDERATION_VALUE)
 
     def check_consideration(self, soup: BeautifulSoup) -> list:
         logging.info("check_obj_has_attach function called")
@@ -25,11 +25,11 @@ class CheckObjHasAttach(Consideration):
             self.errors.append(error_as_dict("Unable to find and an Attach page within the Object", "N/A"))
 
     # TODO: determine if this is needed or if you can make the method not abstract.
-    def evaluate_consideration(self):
-        super().evaluate_consideration()
+    def evaluate_score_and_result(self):
+        super().evaluate_score_and_result()
 
-    def add_consideration(self, report_helper):
-        super().add_consideration(report_helper)
+    def add_to_report(self, report_helper):
+        super().add_to_report(report_helper)
 
 
 

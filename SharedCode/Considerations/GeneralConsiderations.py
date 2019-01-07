@@ -6,8 +6,8 @@ from SharedCode.Considerations.Consideration import Consideration
 
 class CheckExceptionDetails(Consideration):
     def __init__(self):
-        super().__init__()
-        self.value = "Do all Exception stages have an exception detail? "
+        CONSIDERATION_NAME = "Do all Exception stages have an exception detail?"
+        super().__init__(CONSIDERATION_NAME)
 
     def check_consideration(self, soup: BeautifulSoup) -> list:
         logging.info("'CheckExceptionDetail method called")
@@ -24,20 +24,20 @@ class CheckExceptionDetails(Consideration):
 
                 self.errors.append(error_as_dict(exception_name, exception_page))
 
-    def evaluate_consideration(self):
+    def evaluate_score_and_result(self):
         """Calculate the consideration's score and result. Default value is hard fail {score: 0, result: No}."""
         if self.errors:
             if len(self.errors) < 2:
                 self.score = self.max_score * 0.7
                 self.result = Result.FREQUENTLY
-            elif 2 < len(self.errors) < 4:
+            elif 2 <= len(self.errors) <= 4:
                 self.score = self.max_score * 0.3
                 self.result = Result.INFREQUENTLY
             else:
                 self.score = 0
                 self.result = Result.NO
 
-    def add_consideration(self, report_helper):
-        super().add_consideration(report_helper)
+    def add_to_report(self, report_helper):
+        super().add_to_report(report_helper)
 
 

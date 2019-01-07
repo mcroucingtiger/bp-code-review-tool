@@ -73,12 +73,12 @@ class ReportPageHelper:
                 consideration['Errors'].append(error)
                 break
 
-    def set_consideration(self, consideration_name, max_score):
+    def set_consideration(self, consideration_name, max_score, score, result):
         """Create a consideration dict containing an errors list.
 
         Default value is for success."""
         self.considerations.append({'Consideration Name': consideration_name, 'Errors': [],
-                                    'Max Score': max_score, 'Score': 10, 'Result': "Yes"})
+                                    'Max Score': max_score, 'Score': score, 'Result': result})
 
     def set_consideration_score(self, consideration_name, score, result):
         """Set the consideration result if there are any error cases"""

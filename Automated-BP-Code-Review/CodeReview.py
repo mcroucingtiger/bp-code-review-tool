@@ -95,12 +95,13 @@ def make_report_object(object_soup):
     # If statements are for the scoring of individual modules that any errors.
 
     # TODO: Implement this way
+    # TODO: Make so config file applicable
     object_considerations = [CheckExceptionDetails(), CheckObjHasAttach()]
 
     for consideration in object_considerations:
         consideration.check_consideration(object_soup)
-        consideration.evaluate_consideration()
-        consideration.add_consideration(report_helper)
+        consideration.evaluate_score_and_result()
+        consideration.add_to_report(report_helper)
 
     return report_helper.get_report_page()
 
