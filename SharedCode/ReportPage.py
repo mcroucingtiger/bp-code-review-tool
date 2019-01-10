@@ -3,10 +3,7 @@ import logging
 
 
 class Result:
-    """Result is a column in both the Object and Process report page.
-
-    This Class is similar to an enum, to help clarify their use as parameters
-    """
+    """Result is a column in both the Object and Process report pages."""
     NO = 'No'
     YES = 'Yes'
     FREQUENTLY = 'Frequently'
@@ -14,15 +11,8 @@ class Result:
     NOT_APPLICABLE = 'Not Applicable'
 
 
-class Impact:
-    None_ = 'None'  # Underscore as keyword
-    HIGH = 'High'
-    MEDIUM = 'Medium'
-    LOW = 'Low'
-
-
-class ReportPageHelper:
-    """"Helper class to manage a report page.
+class ReportPage:
+    """"Class to manage information within a report page.
 
     Categorises all error cases found into a structure of:
     considerations (list) > consideration (dict) > errors (list) > error (dict)
@@ -32,7 +22,7 @@ class ReportPageHelper:
 
     Attributes:
           considerations (list): List of considerations that have been processed for this report page
-          page_type (str): 'Object' or 'Process'
+          page_type (str): 'Object','Process' or 'Settings"
           page_name (str): The name of the current Object or Process from the XML
           actions (list of str): If page is for an Object, lists out each Action contained from XML
 
@@ -45,7 +35,7 @@ class ReportPageHelper:
         self.actions = []
 
     def set_page_type(self, page_type, soup: BeautifulSoup):
-        """Set the type of report page as Process or Object and gets Object's Actions """
+        """Set the type of report page as Process/Object and gets Object's Actions """
         self.page_type = page_type
 
         if page_type == 'Process':
@@ -87,8 +77,8 @@ class ReportPageHelper:
                 consideration['Score'] = score
                 consideration['Result'] = result
 
-    def get_report_page(self) -> dict:
-        """Return a dict containing the report page information, considerations and their corresponding error data"""
+    def get_page_as_dict(self) -> dict:
+        """Return a dict containing the report page information, considerations and the corresponding error data"""
         return {
             "Report Page Name": self.page_name,
             "Page Type": self.page_type,
@@ -98,6 +88,6 @@ class ReportPageHelper:
 
 
 def error_as_dict(error_name, error_location) -> dict:
-    """Create error dict"""
+    """Create an error dict of {Error Name: ..., Error Location: ...}."""
     return {'Error Name': error_name, 'Error Location': error_location}
 
