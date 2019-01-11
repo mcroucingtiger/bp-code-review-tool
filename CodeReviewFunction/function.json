@@ -1,5 +1,6 @@
 {
   "scriptFile": "CodeReview.py",
+  "entryPoint": "main",
   "bindings": [
     {
       "authLevel": "anonymous",

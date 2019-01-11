@@ -3,37 +3,63 @@ import azure.functions as func
 from bs4 import BeautifulSoup
 from bs4 import SoupStrainer
 import json
-import sys
-from os import path
+import time
 from collections import namedtuple
-sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-from SharedCode.ReportPage import ReportPage, Result
-from SharedCode.Considerations.ObjectConsiderations import CheckObjHasAttach, object_consideration_module_classes
-from SharedCode.Considerations.ProcessConsiderations import process_consideration_module_classes
-
+from .ReportPage import ReportPage, Result
+from .Considerations.ObjectConsiderations import object_consideration_module_classes
+from .Considerations.ProcessConsiderations import process_consideration_module_classes
 
 # logging.critical .error .warning .info .debug
-logging.info("__init__ page running")
+logging.info("CodeReview module running")
 Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues, metadata')
 
 
-def main():#req: func.HttpRequest) -> func.HttpResponse:
+def testing():
+    print("Testing running")
+    report_pages = []
+    print("Getting release off desktop")
+
+    release_path = "C:/Users/MorganCrouch/Desktop/testing Release.bprelease"
+    infile = open(release_path, "r")
+    xml_string = infile.read()
+    infile.close()
+
+    # Use the extracted XML to create the report
+    if xml_string:
+        sub_soups = make_soups(xml_string)  # Parse the XML into multiple BeautifulSoup Objects
+        metadata = extract_metadata(sub_soups.metadata)
+        object_considerations, process_considerations = get_active_considerations(metadata)
+
+        for object_tag in sub_soups.objects.contents:
+            report_page_dict = make_report_object(object_tag, object_considerations, metadata)
+            report_pages.append(report_page_dict)
+
+        for process_tag in sub_soups.processes.contents:
+            report_page_dict = make_report_process(process_tag, process_considerations, metadata)
+            report_pages.append(report_page_dict)
+
+        report_page_dict = make_report_settings(metadata)
+        report_pages.append(report_page_dict)
+
+        json_report = json.dumps(report_pages)
+        print(json_report)
+
+    else:
+        print("XML wasn't read")
+
+
+def main(req: func.HttpRequest) -> func.HttpResponse:
     print("Main running")
     xml_string = ''
     report_pages = []
     logging.info("Python HTTP trigger function processed a request.")
 
-    # try:
-    #     req_body = req.get_body()
-    #     xml_string = req_body
-    # except ValueError:
-    #     logging.error("Unable to access request body")
-    #     pass
-
-    # Testing only
-    release_path = "C:/Users/MorganCrouch/Desktop/testing Release.bprelease"
-    infile = open(release_path, "r")
-    xml_string = infile.read()
+    try:
+        req_body = req.get_body()
+        xml_string = req_body
+    except ValueError:
+        logging.error("Unable to access request body")
+        pass
 
     # Use the extracted XML to create the report
     if xml_string:
@@ -67,17 +93,36 @@ def main():#req: func.HttpRequest) -> func.HttpResponse:
 
 def make_soups(xml_string) -> Sub_Soup:
     """Turn the xml into a named tuple of BeautifulSoup objects for all processes, objects and queues"""
+    start = time.clock()
+    print('make soups running')
     only_metadata = SoupStrainer('header')
     soup_metadata = BeautifulSoup(xml_string, 'lxml', parse_only=only_metadata)
+    end = time.clock()
+    print('metadata ' + str(end - start))
 
-    only_objects = SoupStrainer('object', xmlns=True)
+    start = time.clock()
+    only_objects = SoupStrainer('object', {"type": "object"})
     soup_objects = BeautifulSoup(xml_string, 'lxml', parse_only=only_objects)
+    end = time.clock()
+    print('When finding object type ' + str(end - start))
 
+    start = time.clock()
+    only_objects = SoupStrainer('process', xmlns=True)
+    soup_objects = BeautifulSoup(xml_string, 'lxml', parse_only=only_objects)
+    end = time.clock()
+    print('When finding full tree ' + str(end - start))
+
+    start = time.clock()
     only_processes = SoupStrainer('process', xmlns=True)
     soup_processes = BeautifulSoup(xml_string, 'lxml', parse_only=only_processes)
+    end = time.clock()
+    print('When finding full process ' + str(end - start))
 
+    start = time.clock()
     only_work_queue = SoupStrainer('work-queue', xmlns=True)
     soup_queue = BeautifulSoup(xml_string, 'lxml', parse_only=only_work_queue)
+    end = time.clock()
+    print('When finding full queue ' + str(end - start))
 
     return Sub_Soup(soup_processes, soup_objects, soup_queue, soup_metadata)
 
@@ -215,4 +260,5 @@ def make_report_settings(metadata):
     return report_page.get_page_as_dict()
 
 
-main()
+if __name__ == '__main__':
+    testing()

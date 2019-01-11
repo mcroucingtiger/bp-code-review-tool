@@ -1,9 +1,5 @@
-from bs4 import BeautifulSoup
-import logging
 import inspect
 import sys
-from SharedCode.ReportPage import error_as_dict, Result
-from SharedCode.Considerations.ConsiderationAbstract import Consideration
 
 
 def process_consideration_module_classes() -> list:

@@ -2,8 +2,8 @@ from bs4 import BeautifulSoup
 import logging
 import inspect
 import sys
-from SharedCode.ReportPage import error_as_dict, Result
-from SharedCode.Considerations.ConsiderationAbstract import Consideration
+from ..ReportPage import error_as_dict, Result
+from .ConsiderationAbstract import Consideration
 
 
 def object_consideration_module_classes() -> list:

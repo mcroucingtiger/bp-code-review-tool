@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from SharedCode.ReportPage import Result
+from ..ReportPage import Result
 from bs4 import BeautifulSoup
 
 
