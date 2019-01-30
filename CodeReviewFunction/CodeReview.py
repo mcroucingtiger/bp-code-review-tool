@@ -4,6 +4,10 @@ from bs4 import BeautifulSoup
 from bs4 import SoupStrainer
 import json
 import time
+from multiprocessing import Pool, Queue, Process
+import dill
+import pickle
+from multiprocessing import cpu_count
 from collections import namedtuple
 from .ReportPage import ReportPage, Result
 from .Considerations.ObjectConsiderations import object_consideration_module_classes
@@ -12,21 +16,43 @@ from .Considerations.ProcessConsiderations import process_consideration_module_c
 # logging.critical .error .warning .info .debug
 logging.info("CodeReview module running")
 Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues, metadata')
+xml_string = 'a'  # TODO: check if needed
 
 
-def testing():
-    print("Testing running")
+
+def get_local_xml():
+    release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
+                   "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
+    infile = open(release_path, "r")
+    global xml_string  # TODO: if this works, add this to main(). needed for pool
+    xml_string = infile.read()
+    infile.close()
+
+    return xml_string
+
+
+def init_xml_string(test):
+    global xml_string
+    xml_string = test
+
+
+def test_with_local():
+    print("Local testing running")
     report_pages = []
     print("Getting release off desktop")
 
-    release_path = "C:/Users/MorganCrouch/Desktop/testing Release.bprelease"
-    infile = open(release_path, "r")
-    xml_string = infile.read()
-    infile.close()
+    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
+    release_path_ = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
+                   "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
+    release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
+                    "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
+
+    xml_string = get_local_xml()
 
     # Use the extracted XML to create the report
     if xml_string:
         sub_soups = make_soups(xml_string)  # Parse the XML into multiple BeautifulSoup Objects
+
         metadata = extract_metadata(sub_soups.metadata)
         object_considerations, process_considerations = get_active_considerations(metadata)
 
@@ -91,26 +117,82 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         )
 
 
+def create_soup(strainer_param):
+    individual_soup_str = None
+    if strainer_param == 'header':
+        soup_strainer = SoupStrainer(strainer_param)
+        individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
+        individual_soup_str = str(individual_soup)
+
+    elif strainer_param == 'process' or strainer_param == 'work-queue':
+        soup_strainer = SoupStrainer(strainer_param, xmlns=True)
+        individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
+        individual_soup_str = str(individual_soup)
+
+
+    elif strainer_param == 'object':
+        soup_strainer = SoupStrainer('process', {"type": "object"})
+        individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
+        individual_soup_str = str(individual_soup)
+
+    return individual_soup_str
+
+
+
+
+
+
+
+# TODO add multithreading here
 def make_soups(xml_string) -> Sub_Soup:
     """Turn the xml into a named tuple of BeautifulSoup objects for all processes, objects and queues"""
+    # NOTE: attempted to get multiprocessing working and failed. Issues/notes were:
+    #   1. Dont mulit-thread, multi-process
+    #   2. Can give access to the xml_string using global but dont know how to do this for
+    #       queues (which i think can handle bigger objects?)
+    #       https://thelaziestprogrammer.com/python/multiprocessing-pool-a-global-solution
+    #   3. It processes the SoupStrainer fine enough, but the big issue is returning the BeautifulSoup object back
+    #      to the main process. BeuatifulSoup objects cant be pickled as they always get recursive errors.
+    #   4. Dont bother increasing the recursion limit. Doesnt seem to help.
+    #
+
+    pool = Pool(4, initializer=get_local_xml) # fix global
+    strainers = ['process', 'header', 'object', 'work-queue']
+
+
+    print("multi-processing")
+    start = time.clock()
+    results = pool.map(create_soup, strainers)
+    pool.close()
+    pool.join()
+    end = time.clock()
+    print('With multi ' + str(end - start))
+    start = time.clock()
+    print('encoding to BS4 objects')
+    r = [BeautifulSoup(x, 'lxml') for x in results]
+    end = time.clock()
+    print('back to bs4: ' + str(end - start))
+
+
+
+
     start = time.clock()
     print('make soups running')
     only_metadata = SoupStrainer('header')
     soup_metadata = BeautifulSoup(xml_string, 'lxml', parse_only=only_metadata)
+
     end = time.clock()
     print('metadata ' + str(end - start))
 
     start = time.clock()
-    only_objects = SoupStrainer('object', {"type": "object"})
+    only_objects = SoupStrainer('process', {"type": "object"})
     soup_objects = BeautifulSoup(xml_string, 'lxml', parse_only=only_objects)
+    soup_metadata_str = str(soup_objects)
+    print(soup_metadata_str)
+    re_soup = BeautifulSoup(soup_metadata_str, 'lxml')
+    a = pickle.dumps(soup_metadata_str)
     end = time.clock()
     print('When finding object type ' + str(end - start))
-
-    start = time.clock()
-    only_objects = SoupStrainer('process', xmlns=True)
-    soup_objects = BeautifulSoup(xml_string, 'lxml', parse_only=only_objects)
-    end = time.clock()
-    print('When finding full tree ' + str(end - start))
 
     start = time.clock()
     only_processes = SoupStrainer('process', xmlns=True)
@@ -261,4 +343,4 @@ def make_report_settings(metadata):
 
 
 if __name__ == '__main__':
-    testing()
+    test_with_local()
