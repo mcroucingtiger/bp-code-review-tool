@@ -1,7 +1,7 @@
 from bs4 import SoupStrainer, BeautifulSoup
 import time
 from collections import namedtuple
-from ..CodeReview import make_soups,Sub_Soup, get_local_xml
+from ..CodeReview import make_all_soups,Sub_Soup, get_local_xml
 from multiprocessing import Pool, Queue, Process
 import math
 

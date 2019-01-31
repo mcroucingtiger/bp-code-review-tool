@@ -4,10 +4,7 @@ from bs4 import BeautifulSoup
 from bs4 import SoupStrainer
 import json
 import time
-from multiprocessing import Pool, Queue, Process
-import dill
-import pickle
-from multiprocessing import cpu_count
+from multiprocessing import Pool
 from collections import namedtuple
 from .ReportPage import ReportPage, Result
 from .Considerations.ObjectConsiderations import object_consideration_module_classes
@@ -16,20 +13,6 @@ from .Considerations.ProcessConsiderations import process_consideration_module_c
 # logging.critical .error .warning .info .debug
 logging.info("CodeReview module running")
 Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues, metadata')
-xml_string_global = 'a'
-
-def get_local_xml(path):
-
-    if path:
-        release_path = path
-    else:
-        release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
-                       "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
-
-    infile = open(release_path, "r")
-    xml_string = infile.read()
-    infile.close()
-    return xml_string
 
 
 def test_with_local():
@@ -42,21 +25,28 @@ def test_with_local():
                    "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
     release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
                     "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
+    release_path_ = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
 
     xml_string = get_local_xml(release_path)
 
     # Use the extracted XML to create the report
     if xml_string:
-        sub_soups = make_soups(xml_string)  # Parse the XML into multiple BeautifulSoup Objects
+        sub_soups = make_all_soups(xml_string)  # Parse the XML into multiple BeautifulSoup Objects
 
-        metadata = extract_metadata(sub_soups.metadata)
-        object_considerations, process_considerations = get_active_considerations(metadata)
+        # Delete after testing
+        try:
+            metadata = extract_metadata(sub_soups.metadata)
+            object_considerations, process_considerations = get_active_considerations(metadata)
+        except:
+            print("Unable to find the header in the XML")
 
-        for object_tag in sub_soups.objects.contents:
+        # print(sub_soups.objects.prettify())
+
+        for object_tag in sub_soups.objects:
             report_page_dict = make_report_object(object_tag, object_considerations, metadata)
             report_pages.append(report_page_dict)
 
-        for process_tag in sub_soups.processes.contents:
+        for process_tag in sub_soups.processes:
             report_page_dict = make_report_process(process_tag, process_considerations, metadata)
             report_pages.append(report_page_dict)
 
@@ -85,7 +75,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     # Use the extracted XML to create the report
     if xml_string:
-        sub_soups = make_soups(xml_string)  # Parse the XML into multiple BeautifulSoup Objects
+        sub_soups = make_all_soups(xml_string)  # Parse the XML into multiple BeautifulSoup Objects
         metadata = extract_metadata(sub_soups.metadata)
         object_considerations, process_considerations = get_active_considerations(metadata)
 
@@ -113,9 +103,91 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         )
 
 
-def create_soup(strainer_param):
+def get_local_xml(path):
+    if path:
+        release_path = path
+    else:
+        release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
+                       "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
+
+    infile = open(release_path, "r")
+    xml_string = infile.read()
+    infile.close()
+    return xml_string
+
+
+def make_all_soups(xml_string) -> Sub_Soup:
+    """Turn the xml into a named tuple of BeautifulSoup objects for all processes, objects, queues and the metadata.
+
+    Uses multiprocessing to convert the full XML into multiple bs4 objects to improve speed. To send data to/from
+    pool processes, data must be pickled. bs4 objects cannot be pickled, so process recieved the object as a string and
+    converts back to BeautifulSoup after multiprocessing complete.
+
+    Returns a Sub_Soup named tupple object defined at the top of the module.
+    """
+    pool = Pool(4)
+    strainers = ['process', 'object', 'work-queue', 'header']
+    soup_data = [(strainer, xml_string) for strainer in strainers]  # pool.starmap requires an iterable of tuples
+    print("multi-processing")
+    start = time.clock()
+    results = pool.starmap(extract_soup, soup_data)
+    pool.close()
+    pool.join()
+    end = time.clock()
+    print('With multi ' + str(end - start))
+
+    start = time.clock()
+    print('decoding to BS4 objects')
+
+    soups = []
+    for i in range(4):
+        if i == 1:
+            soups.append(BeautifulSoup(results[i], 'lxml', parse_only=SoupStrainer('process', {"type": "object"})))
+        else:
+            soups.append(BeautifulSoup(results[i], 'lxml', parse_only=SoupStrainer(xmlns=True)))
+
+
+    print(soups[1])
+    end = time.clock()
+    print('back to bs4: ' + str(end - start))
+
+    return Sub_Soup(soups[0], soups[1], soups[2], soups[3])
+    # start = time.clock()
+    # print('make soups running')
+    # only_metadata = SoupStrainer('header')
+    # soup_metadata = BeautifulSoup(xml_string, 'lxml', parse_only=only_metadata)
+    #
+    # end = time.clock()
+    # print('metadata ' + str(end - start))
+    #
+    # start = time.clock()
+    # only_objects = SoupStrainer('process', {"type": "object"})
+    # soup_objects = BeautifulSoup(xml_string, 'lxml', parse_only=only_objects)
+    # soup_metadata_str = str(soup_objects)
+    #
+    # end = time.clock()
+    # print('When finding object type ' + str(end - start))
+    #
+    # start = time.clock()
+    # only_processes = SoupStrainer('process', xmlns=True)
+    # soup_processes = BeautifulSoup(xml_string, 'lxml', parse_only=only_processes)
+    # end = time.clock()
+    # print('When finding full process ' + str(end - start))
+    #
+    # start = time.clock()
+    # only_work_queue = SoupStrainer('work-queue', xmlns=True)
+    # soup_queue = BeautifulSoup(xml_string, 'lxml', parse_only=only_work_queue)
+    # end = time.clock()
+    # print('When finding full queue ' + str(end - start))
+    #
+    # return Sub_Soup(soup_processes, soup_objects, soup_queue, soup_metadata)
+
+
+def extract_soup(strainer_param, xml_string):
+    """Create a single soup object from the full xml_string and return it in str form.
+
+    This function is called multiple times in parallel by the multi-processing pool.starmap"""
     individual_soup_str = None
-    xml_string = xml_string_global
     if strainer_param == 'header':
         soup_strainer = SoupStrainer(strainer_param)
         individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
@@ -125,83 +197,12 @@ def create_soup(strainer_param):
         soup_strainer = SoupStrainer(strainer_param, xmlns=True)
         individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
         individual_soup_str = str(individual_soup)
-
-
     elif strainer_param == 'object':
         soup_strainer = SoupStrainer('process', {"type": "object"})
         individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
         individual_soup_str = str(individual_soup)
 
     return individual_soup_str
-
-def initializer(xml):
-    global xml_string_global
-    xml_string_global = xml
-
-# TODO add multithreading here
-def make_soups(xml_string) -> Sub_Soup:
-    """Turn the xml into a named tuple of BeautifulSoup objects for all processes, objects and queues"""
-    # NOTE: attempted to get multiprocessing working and failed. Issues/notes were:
-    #   1. Dont mulit-thread, multi-process
-    #   2. Can give access to the xml_string using global but dont know how to do this for
-    #       queues (which i think can handle bigger objects?)
-    #       https://thelaziestprogrammer.com/python/multiprocessing-pool-a-global-solution
-    #   3. It processes the SoupStrainer fine enough, but the big issue is returning the BeautifulSoup object back
-    #      to the main process. BeuatifulSoup objects cant be pickled as they always get recursive errors.
-    #   4. Dont bother increasing the recursion limit. Doesnt seem to help.
-    #
-
-    pool = Pool(4, initializer, initargs=[xml_string])
-    strainers = ['process', 'header', 'object', 'work-queue']
-    #soup_data = [(strainer, xml_string) for strainer in strainers]  # pool.starmap requires an iterable of tuples
-    print("multi-processing")
-    start = time.clock()
-    #results = pool.starmap(create_soup, soup_data)
-    results = pool.map(create_soup, strainers)
-    pool.close()
-    pool.join()
-    end = time.clock()
-    print('With multi ' + str(end - start))
-    start = time.clock()
-    print('encoding to BS4 objects')
-    r = [BeautifulSoup(x, 'lxml') for x in results]
-    end = time.clock()
-    print('back to bs4: ' + str(end - start))
-
-
-
-
-    start = time.clock()
-    print('make soups running')
-    only_metadata = SoupStrainer('header')
-    soup_metadata = BeautifulSoup(xml_string, 'lxml', parse_only=only_metadata)
-
-    end = time.clock()
-    print('metadata ' + str(end - start))
-
-    start = time.clock()
-    only_objects = SoupStrainer('process', {"type": "object"})
-    soup_objects = BeautifulSoup(xml_string, 'lxml', parse_only=only_objects)
-    soup_metadata_str = str(soup_objects)
-    print(soup_metadata_str)
-    re_soup = BeautifulSoup(soup_metadata_str, 'lxml')
-    a = pickle.dumps(soup_metadata_str)
-    end = time.clock()
-    print('When finding object type ' + str(end - start))
-
-    start = time.clock()
-    only_processes = SoupStrainer('process', xmlns=True)
-    soup_processes = BeautifulSoup(xml_string, 'lxml', parse_only=only_processes)
-    end = time.clock()
-    print('When finding full process ' + str(end - start))
-
-    start = time.clock()
-    only_work_queue = SoupStrainer('work-queue', xmlns=True)
-    soup_queue = BeautifulSoup(xml_string, 'lxml', parse_only=only_work_queue)
-    end = time.clock()
-    print('When finding full queue ' + str(end - start))
-
-    return Sub_Soup(soup_processes, soup_objects, soup_queue, soup_metadata)
 
 
 def extract_metadata(soup_metadata: BeautifulSoup):
@@ -300,9 +301,9 @@ def make_report_object(soup_object, object_considerations, metadata):
     active_objects = metadata['active considerations object']
 
     # All modules intended for creating a object specific page in the report.
-    # If statements are for the scoring of individual modules that any errors.
+    # 'if' statements are for the scoring of individual modules that have any errors.
 
-    current_object = soup_object.next_element.get('name').lower()
+    current_object = soup_object.get('name').lower()
 
     for object_consideration in object_considerations:
         # Check the Object name isn't a blacklisted object
