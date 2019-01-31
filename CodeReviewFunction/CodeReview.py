@@ -16,24 +16,20 @@ from .Considerations.ProcessConsiderations import process_consideration_module_c
 # logging.critical .error .warning .info .debug
 logging.info("CodeReview module running")
 Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues, metadata')
-xml_string = 'a'  # TODO: check if needed
+xml_string_global = 'a'
 
+def get_local_xml(path):
 
+    if path:
+        release_path = path
+    else:
+        release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
+                       "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
 
-def get_local_xml():
-    release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
-                   "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
     infile = open(release_path, "r")
-    global xml_string  # TODO: if this works, add this to main(). needed for pool
     xml_string = infile.read()
     infile.close()
-
     return xml_string
-
-
-def init_xml_string(test):
-    global xml_string
-    xml_string = test
 
 
 def test_with_local():
@@ -47,7 +43,7 @@ def test_with_local():
     release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
                     "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
 
-    xml_string = get_local_xml()
+    xml_string = get_local_xml(release_path)
 
     # Use the extracted XML to create the report
     if xml_string:
@@ -119,6 +115,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
 def create_soup(strainer_param):
     individual_soup_str = None
+    xml_string = xml_string_global
     if strainer_param == 'header':
         soup_strainer = SoupStrainer(strainer_param)
         individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
@@ -137,11 +134,9 @@ def create_soup(strainer_param):
 
     return individual_soup_str
 
-
-
-
-
-
+def initializer(xml):
+    global xml_string_global
+    xml_string_global = xml
 
 # TODO add multithreading here
 def make_soups(xml_string) -> Sub_Soup:
@@ -156,12 +151,12 @@ def make_soups(xml_string) -> Sub_Soup:
     #   4. Dont bother increasing the recursion limit. Doesnt seem to help.
     #
 
-    pool = Pool(4, initializer=get_local_xml) # fix global
+    pool = Pool(4, initializer, initargs=[xml_string])
     strainers = ['process', 'header', 'object', 'work-queue']
-
-
+    #soup_data = [(strainer, xml_string) for strainer in strainers]  # pool.starmap requires an iterable of tuples
     print("multi-processing")
     start = time.clock()
+    #results = pool.starmap(create_soup, soup_data)
     results = pool.map(create_soup, strainers)
     pool.close()
     pool.join()
