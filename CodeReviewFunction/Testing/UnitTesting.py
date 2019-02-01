@@ -1,9 +1,7 @@
-from bs4 import SoupStrainer, BeautifulSoup
+from bs4 import BeautifulSoup
 import time
-from collections import namedtuple
-from ..CodeReview import make_all_soups,Sub_Soup, get_local_xml
-from multiprocessing import Pool, Queue, Process
-import math
+from ..CodeReview import extract_pickled_soups, get_local_xml, deserialize_to_soup
+import pickle
 
 print("Local unit testing page started")
 
@@ -19,17 +17,7 @@ def has_attr_bpversion(tag):
     return tag.has_attr('bpversion')
 
 
-def get_local_xml_soups() -> BeautifulSoup:
-    """Gets and converts local XML into Beautiful Soup objects"""
-    contents = get_local_xml(release_path)
-    start = time.clock()
-    global xml_string
-    xml_string = contents
-    mp_factorizer(["header"], 4)
-    # sub_soups = make_soups(contents)
-    end = time.clock()
-    print("making all sub_soups " + str(end - start))
-
+def print_sub_soups_contents(sub_soups):
     print('\nObjects:')
     for object_tag in sub_soups.objects:
         print(object_tag.get('name'))
@@ -40,19 +28,8 @@ def get_local_xml_soups() -> BeautifulSoup:
     for queue_tag in sub_soups.queues:
         print(queue_tag.get('name'))
 
-    return sub_soups
 
-
-def attach_action_test():
-    attach_found = False
-    soup = get_local_xml_soups()
-    subsheets = soup.find_all('subsheet')  # Find all page names
-    for subsheet in subsheets:
-        if subsheet.contents[1].string.lower().find("attach") >= 0:  # A page has the work 'Attach' in it
-            attach_found = True
-
-
-def set_actions(object_soup: BeautifulSoup):
+def print_actions_in_objectsoup(object_soup: BeautifulSoup):
     actions = object_soup.find_all("subsheet")
     print("\n---\n")
     for action in actions:
@@ -60,28 +37,28 @@ def set_actions(object_soup: BeautifulSoup):
     pass
 
 
-def get_name(object_soup):
+def print_name_objectsoup(object_soup):
     print("\n---\n")
     print(object_soup.contents[0].get('name'))
 
 
 def check_consideration(soup: BeautifulSoup) -> list:
-    """Check if an Object starts with Attach action."""
-    blacklist_attach_actions = ['launch', 'close', 'terminate', 'attach', 'initialise', 'clean up', 'detach']
+    """Check if an Object starts with Attach page."""
+    BLACKLIST_ATTACH_ACTIONS = ['launch', 'close', 'terminate', 'attach', 'initialise', 'clean up', 'detach']
     blacklist_object_names = ['wrapper']
 
-    object_name = soup_object.next_element.get('name').lower()
+    object_name = soup_object.get('name').lower()
     # Current Object name not blacklisted
     # TODO pretty sure its still not ignoring
     if not any(blacklist_word in object_name for blacklist_word in blacklist_object_names):
         # Iterate over all Actions in the Object
-        subsheets = soup.find_all('subsheet', recursive=False)  # TODO this can turn off recursive?
-        for subsheet in subsheets:
-            action_name = subsheet.next_element.string.lower()
+        actions = soup.find_all('subsheet')  # Turning off recursion seems to make no speed improvement?
+        for action in actions:
+            action_name = action.next_element.string.lower()
             # Check the Action does not contain a word from the blacklist
-            if not any(blacklist_action in action_name for blacklist_action in blacklist_attach_actions):
-                print("Not blacklisted - " + subsheet.next_element.string )
-                if not _action_begins_attach(subsheet, soup):
+            if not any(blacklist_action in action_name for blacklist_action in BLACKLIST_ATTACH_ACTIONS):
+                print("Not blacklisted - " + action.next_element.string)
+                if not _action_begins_attach(action, soup):
                     print("/// Action failed ///")
                     #print("Action doesn't begin with an attach")
 
@@ -89,13 +66,15 @@ def check_consideration(soup: BeautifulSoup) -> list:
                 else:
                     print("*******************")
                     pass
+            else:
+                print(action_name + " -- blackisted action")
     else:
         # Add error that object was blacklisted but force max score and result of Not Applicable
-        ...
+        print(object_name + " -- blacklisted object")
 
 
 def _action_begins_attach(subsheet, soup):
-    """Return True an Action's page starts with an Attach page stage"""
+    """Return True if an Action's page starts with an Attach page stage"""
     start_time = time.clock()
     # TODO: Optimise searching, potentially use soup strained
     subsheet_id = subsheet.get('subsheetid')
@@ -119,67 +98,29 @@ def _action_begins_attach(subsheet, soup):
     return False
 
 
-def get_single_soup(strainer_param):
-    individual_soup = None
-    if strainer_param == 'header':
-      soup_strainer = SoupStrainer(strainer_param)
-      individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
-
-    # elif strainer_param == 'process' or strainer_param == 'work-queue':
-    #     soup_strainer = SoupStrainer(strainer_param, xmlns=True)
-    #     individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
-
-    return individual_soup
-
-
-def mp_factorizer(elements, nprocs):
-
-    def worker(elements, out_q):
-        """ The worker function, invoked in a process. 'nums' is a
-            list of numbers to factor. The results are placed in
-            a dictionary that's pushed to a queue.
-        """
-        outdict = {}
-        for element in elements:
-            outdict[element] = get_single_soup(element)
-        out_q.put(outdict)
-
-    # Each process will get 'chunksize' nums and a queue to put his out
-    # dict into
-    out_q = Queue()
-    chunksize = int(math.ceil(len(elements) / float(nprocs)))
-    procs = []
-
-    for i in range(nprocs):
-        p = Process(
-                target=worker,
-                args=(elements[chunksize * i:chunksize * (i + 1)],
-                      out_q))
-        procs.append(p)
-        p.start()
-
-    # Collect all results into a single result dict. We know how many dicts
-    # with results to expect.
-    resultdict = {}
-    for i in range(nprocs):
-        resultdict.update(out_q.get())
-
-    # Wait for all worker processes to finish
-    for p in procs:
-        p.join()
-
-    return resultdict
-
+def get_local_pickled_results():
+    """Get results list from the pickled version saved in file"""
+    file_location = 'C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction' \
+                    '/Testing/results_big_testing.txt'
+    with open(file_location, 'rb') as file:
+        results = pickle.load(file)
+    return results
 
 
 if __name__ == '__main__':
     print('__main__ running for UnitTesting')
     full_speed_start = time.clock()
-    sub_group = get_local_xml_soups()
-    for soup_object in sub_group.objects:
-        object_name = soup_object.next_element.get('name')
+
+    # Using functions in CodeReview
+    pickled_results = get_local_pickled_results()
+    sub_soups = deserialize_to_soup(pickled_results)
+    print_sub_soups_contents(sub_soups)
+
+    for soup_object in sub_soups.objects:
+        object_name = soup_object.get('name')
         print('\n=== Current Object: ' + object_name + " ===")
         check_consideration(soup_object)
+
     full_speed_end = time.clock()
     print('\nFull Process Speed: ' + str(full_speed_end - full_speed_start))
 

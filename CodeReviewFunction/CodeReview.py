@@ -9,55 +9,11 @@ from collections import namedtuple
 from .ReportPage import ReportPage, Result
 from .Considerations.ObjectConsiderations import object_consideration_module_classes
 from .Considerations.ProcessConsiderations import process_consideration_module_classes
+import pickle
 
 # logging.critical .error .warning .info .debug
 logging.info("CodeReview module running")
 Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues, metadata')
-
-
-def test_with_local():
-    print("Local testing running")
-    report_pages = []
-    print("Getting release off desktop")
-
-    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
-    release_path_ = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
-                   "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
-    release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
-                    "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
-    release_path_ = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
-
-    xml_string = get_local_xml(release_path)
-
-    # Use the extracted XML to create the report
-    if xml_string:
-        sub_soups = make_all_soups(xml_string)  # Parse the XML into multiple BeautifulSoup Objects
-
-        # Delete after testing
-        try:
-            metadata = extract_metadata(sub_soups.metadata)
-            object_considerations, process_considerations = get_active_considerations(metadata)
-        except:
-            print("Unable to find the header in the XML")
-
-        # print(sub_soups.objects.prettify())
-
-        for object_tag in sub_soups.objects:
-            report_page_dict = make_report_object(object_tag, object_considerations, metadata)
-            report_pages.append(report_page_dict)
-
-        for process_tag in sub_soups.processes:
-            report_page_dict = make_report_process(process_tag, process_considerations, metadata)
-            report_pages.append(report_page_dict)
-
-        report_page_dict = make_report_settings(metadata)
-        report_pages.append(report_page_dict)
-
-        json_report = json.dumps(report_pages)
-        print(json_report)
-
-    else:
-        print("XML wasn't read")
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
@@ -75,7 +31,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     # Use the extracted XML to create the report
     if xml_string:
-        sub_soups = make_all_soups(xml_string)  # Parse the XML into multiple BeautifulSoup Objects
+        sub_soups = extract_pickled_soups(xml_string)  # Parse the XML into multiple BeautifulSoup Objects
         metadata = extract_metadata(sub_soups.metadata)
         object_considerations, process_considerations = get_active_considerations(metadata)
 
@@ -103,6 +59,53 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         )
 
 
+def test_with_local():
+    print("Local testing running")
+    report_pages = []
+    print("Getting release off desktop")
+
+    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
+    release_path_ = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
+                   "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
+    release_path_ = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
+                    "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
+    release_path_ = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
+    release_path = "C:/Users/MorganCrouch/Desktop/Big Testing Release.bprelease"
+
+    xml_string = get_local_xml(release_path)
+
+    if xml_string:
+        # Parse the XML into multiple BeautifulSoup Objects
+        pickled_results = extract_pickled_soups(xml_string)
+        sub_soups = deserialize_to_soup(pickled_results)
+
+        # --- Delete after testing
+        try:
+            metadata = extract_metadata(sub_soups.metadata)
+            object_considerations, process_considerations = get_active_considerations(metadata)
+        except:
+            print("Unable to find the header in the XML")
+
+        # print(sub_soups.objects.prettify())
+
+        for object_tag in sub_soups.objects:
+            report_page_dict = make_report_object(object_tag, object_considerations, metadata)
+            report_pages.append(report_page_dict)
+
+        for process_tag in sub_soups.processes:
+            report_page_dict = make_report_process(process_tag, process_considerations, metadata)
+            report_pages.append(report_page_dict)
+
+        report_page_dict = make_report_settings(metadata)
+        report_pages.append(report_page_dict)
+
+        json_report = json.dumps(report_pages)
+        print(json_report)
+
+    else:
+        print("XML wasn't read")
+
+
 def get_local_xml(path):
     if path:
         release_path = path
@@ -116,74 +119,54 @@ def get_local_xml(path):
     return xml_string
 
 
-def make_all_soups(xml_string) -> Sub_Soup:
-    """Turn the xml into a named tuple of BeautifulSoup objects for all processes, objects, queues and the metadata.
+# Testing only
+def pickle_results_list(results):
+    """Pickle the results list and save to a file to skip this step when testing"""
+    file_location = 'C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction/Testing/results_big_testing.txt'
+    with open(file_location,'wb') as file:
+        pickle.dump(results, file)
 
-    Uses multiprocessing to convert the full XML into multiple bs4 objects to improve speed. To send data to/from
-    pool processes, data must be pickled. bs4 objects cannot be pickled, so process recieved the object as a string and
-    converts back to BeautifulSoup after multiprocessing complete.
 
-    Returns a Sub_Soup named tupple object defined at the top of the module.
+def extract_pickled_soups(xml_string) -> list:
+    """Turn the xml into a list of pickled soups containing processes, objects, queues and the metadata.
+
+    Uses multiprocessing to convert the full XML into multiple pickled bs4 objects to improve pocessing speed.
+    To send data to/from pool processes, objects must be pickled. bs4 objects cannot be pickled, so process return the
+    bs4 objects as pickled versions of the string form of bs4 soup objects.
     """
     pool = Pool(4)
     strainers = ['process', 'object', 'work-queue', 'header']
     soup_data = [(strainer, xml_string) for strainer in strainers]  # pool.starmap requires an iterable of tuples
-    print("multi-processing")
+    print("Multi-processing xml")
     start = time.clock()
-    results = pool.starmap(extract_soup, soup_data)
+    results = pool.starmap(extract_soup_from_xml, soup_data)
     pool.close()
     pool.join()
     end = time.clock()
-    print('With multi ' + str(end - start))
+    print('Time to multi-process xml: ' + str(end - start))
 
+    #pickle_results_list(results)
+    return results
+
+
+def deserialize_to_soup(results):
+    """Convert the pickled strings into bs4 soup objects and returns it as a named tuple of type Sub_Soup."""
     start = time.clock()
-    print('decoding to BS4 objects')
-
+    print('Deserialize to soups')
     soups = []
     for i in range(4):
         if i == 1:
             soups.append(BeautifulSoup(results[i], 'lxml', parse_only=SoupStrainer('process', {"type": "object"})))
         else:
             soups.append(BeautifulSoup(results[i], 'lxml', parse_only=SoupStrainer(xmlns=True)))
-
-
-    print(soups[1])
     end = time.clock()
-    print('back to bs4: ' + str(end - start))
+    print('Time to convert to bs4: ' + str(end - start))
 
-    return Sub_Soup(soups[0], soups[1], soups[2], soups[3])
-    # start = time.clock()
-    # print('make soups running')
-    # only_metadata = SoupStrainer('header')
-    # soup_metadata = BeautifulSoup(xml_string, 'lxml', parse_only=only_metadata)
-    #
-    # end = time.clock()
-    # print('metadata ' + str(end - start))
-    #
-    # start = time.clock()
-    # only_objects = SoupStrainer('process', {"type": "object"})
-    # soup_objects = BeautifulSoup(xml_string, 'lxml', parse_only=only_objects)
-    # soup_metadata_str = str(soup_objects)
-    #
-    # end = time.clock()
-    # print('When finding object type ' + str(end - start))
-    #
-    # start = time.clock()
-    # only_processes = SoupStrainer('process', xmlns=True)
-    # soup_processes = BeautifulSoup(xml_string, 'lxml', parse_only=only_processes)
-    # end = time.clock()
-    # print('When finding full process ' + str(end - start))
-    #
-    # start = time.clock()
-    # only_work_queue = SoupStrainer('work-queue', xmlns=True)
-    # soup_queue = BeautifulSoup(xml_string, 'lxml', parse_only=only_work_queue)
-    # end = time.clock()
-    # print('When finding full queue ' + str(end - start))
-    #
     # return Sub_Soup(soup_processes, soup_objects, soup_queue, soup_metadata)
+    return Sub_Soup(soups[0], soups[1], soups[2], soups[3])
 
 
-def extract_soup(strainer_param, xml_string):
+def extract_soup_from_xml(strainer_param, xml_string):
     """Create a single soup object from the full xml_string and return it in str form.
 
     This function is called multiple times in parallel by the multi-processing pool.starmap"""
@@ -279,6 +262,7 @@ def get_active_considerations(metadata):
     return object_considerations, process_considerations
 
 
+# Still in dev
 def make_report_process(soup_process,process_considerations, metadata):
     """Use the filtered soup of a single process tag element to generate the JSON for a page in the report."""
     report_page = ReportPage()

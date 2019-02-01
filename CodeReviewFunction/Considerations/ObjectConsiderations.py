@@ -7,7 +7,7 @@ from .ConsiderationAbstract import Consideration
 
 
 def object_consideration_module_classes() -> list:
-    """Retrieve a tuple containing all consideration class names' and their metaclass'"""
+    """Retrieve a tuple containing all consideration class names' in this module, and their metaclass'"""
     object_classes = []
     clsmembers = inspect.getmembers(sys.modules[__name__], inspect.isclass)
     irrelevant_classes = ['Consideration', 'ReportPageHelper', 'Result', 'SoupStrainer', 'Sub_Soup', 'BeautifulSoup']
@@ -38,7 +38,7 @@ class CheckObjHasAttach(Consideration):
         for subsheet in subsheets:
             if subsheet.next_element.string.lower().find("attach") >= 0:  # A page has the work 'Attach' in it
                 attach_found = True
-                # TODO: SOON - Ensure this page also has a read attached stage
+                # TODO: SOON - Ensure this page also has a read attached stage (maybe)
                 break
 
         if not attach_found:
