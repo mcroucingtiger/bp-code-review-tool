@@ -15,7 +15,7 @@ class Consideration(ABC):
         self.errors = []
 
     @abstractmethod
-    def check_consideration(self, soup: BeautifulSoup) -> list:
+    def check_consideration(self, soup: BeautifulSoup):
         """Check for error cases within the given soup for each specific report consideration.
 
         All errors found are appended to the object's self.errors list, with each error being a dict.
@@ -39,6 +39,7 @@ class Consideration(ABC):
             self.score = self.max_score * forced_score_scale
             self.result = forced_result
 
+    # Doesn't need to be overridden
     def add_to_report(self, report_helper):
         """Add the consideration and its errors' within the the report_helper's considerations list."""
         report_helper.set_consideration(self.name, self.max_score, self.score, self.result)
