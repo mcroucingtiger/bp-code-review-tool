@@ -69,8 +69,8 @@ def test_with_local():
                    "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
     release_path_ = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
                     "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
-    release_path_ = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"  # Three considerations active
-    release_path = "C:/Users/MorganCrouch/Desktop/Big Testing Release.bprelease"  # All Actions used attach - forced result, exception stages have exception detalil (ignores goldard test object), ignores object has attach
+    release_path = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"  # Three considerations active
+    release_path_ = "C:/Users/MorganCrouch/Desktop/Big Testing Release.bprelease"  # All Actions used attach - forced result, exception stages have exception detalil (ignores goldard test object), ignores object has attach
 
     xml_string = get_local_xml(release_path)
 
@@ -113,9 +113,8 @@ def get_local_xml(path):
         release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
                        "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
 
-    infile = open(release_path, "r")
-    xml_string = infile.read()
-    infile.close()
+    with open(release_path, "r", encoding="utf8") as file:
+        xml_string = file.read()
     return xml_string
 
 
@@ -123,7 +122,7 @@ def get_local_xml(path):
 def pickle_results_list(results):
     """Pickle the results list and save to a file to skip this step when testing"""
     file_location = 'C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction/Testing/results_big_testing.txt'
-    with open(file_location,'wb') as file:
+    with open(file_location,'wb', encoding="utf8") as file:
         pickle.dump(results, file)
 
 

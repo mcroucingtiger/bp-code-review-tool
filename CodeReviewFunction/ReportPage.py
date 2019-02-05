@@ -53,7 +53,9 @@ class ReportPage:
         """Go through a Beautiful Soup of a single BP Object's XML and extracts all Action names"""
         actions = object_soup.find_all("subsheet")
         for action in actions:
-            self.actions.append(action.next_element.string)
+            action_name = action.next_element.string
+            if action_name != 'Clean Up':
+                self.actions.append(action.next_element.string)
         logging.info("Action names from BP Object extracted")
 
     def set_error(self, consideration_name, error: dict):
@@ -68,7 +70,7 @@ class ReportPage:
 
         Default value is for success."""
         self.considerations.append({'Consideration Name': consideration_name, 'Errors': [],
-                                    'Max Score': max_score, 'Score': score, 'Result': result})
+                                    'Score': score, 'Max Score': max_score, 'Result': result})
 
     def set_consideration_score(self, consideration_name, score, result):
         """Set the consideration result if there are any error cases"""

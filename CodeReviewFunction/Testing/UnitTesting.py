@@ -8,11 +8,13 @@ from ..Considerations.ProcessConsiderations import *
 print("Local unit testing page started")
 
 _release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
-release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
+_release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
                "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
 _release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
                "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
-
+_release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/Test Releases Good/MERS v1.0.bprelease"
+_release_path = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
+release_path = "C:/Users/MorganCrouch/Desktop/test.bprelease"
 
 def has_attr_bpversion(tag):
     """Only Objects have an attribute called bpversion. This filter function should return all the Object tags"""
@@ -47,7 +49,7 @@ def print_name_objectsoup(object_soup):
 def get_local_pickled_results():
     """Get results list from the pickled version saved in file"""
     file_location = 'C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction' \
-                    '/Testing/results_big_testing.txt'
+                    '/Testing/Fixtures/results_big_testing.txt'
     with open(file_location, 'rb') as file:
         results = pickle.load(file)
     return results
@@ -57,15 +59,19 @@ if __name__ == '__main__':
     print('__main__ running for UnitTesting')
     full_speed_start = time.clock()
 
-    # Using functions in CodeReview
-    pickled_results = get_local_pickled_results()
-    sub_soups = deserialize_to_soup(pickled_results)
+    # --- To Use Raw XML ---
+    sub_soups = deserialize_to_soup(extract_pickled_soups(get_local_xml(release_path)))
+
+    # -- To Use Pre-Pickled ---
+    # pickled_results = get_local_pickled_results()
+    # sub_soups = deserialize_to_soup(pickled_results)
+
     print_sub_soups_contents(sub_soups)
 
     for soup_object in sub_soups.objects:
         object_name = soup_object.get('name')
         print('\n=== Current Object: ' + object_name + " ===")
-        consideration = CheckObjHasAttach()
+        consideration = CheckGlobalTimeoutUsedWaits()
         consideration.check_consideration(soup_object)
 
     full_speed_end = time.clock()

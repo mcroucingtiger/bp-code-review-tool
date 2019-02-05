@@ -8,8 +8,8 @@ class Consideration(ABC):
     CONSIDERATION_NAME = "Override - Title from Report"
 
     def __init__(self, consideration_name, max_score=10):
-        self.max_score = max_score
         self.score = max_score
+        self.max_score = max_score
         self.name = consideration_name
         self.result = Result.YES
         self.errors = []
