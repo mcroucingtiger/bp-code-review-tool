@@ -5,16 +5,14 @@ import pickle
 from ..Considerations.ObjectConsiderations import *
 from ..Considerations.ProcessConsiderations import *
 
-print("Local unit testing page started")
-
 _release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
-_release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
+release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
                "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
 _release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
                "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
 _release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/Test Releases Good/MERS v1.0.bprelease"
 _release_path = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
-release_path = "C:/Users/MorganCrouch/Desktop/test.bprelease"
+_release_path = "C:/Users/MorganCrouch/Desktop/test.bprelease"
 
 def has_attr_bpversion(tag):
     """Only Objects have an attribute called bpversion. This filter function should return all the Object tags"""
@@ -68,11 +66,16 @@ if __name__ == '__main__':
 
     print_sub_soups_contents(sub_soups)
 
+    consid_start = time.clock()
     for soup_object in sub_soups.objects:
         object_name = soup_object.get('name')
         print('\n=== Current Object: ' + object_name + " ===")
-        consideration = CheckGlobalTimeoutUsedWaits()
-        consideration.check_consideration(soup_object)
+
+        consideration = CheckWaitUsesDataItem()
+        consideration.check_consideration(soup_object, None)
+    consid_end = time.clock()
+
+    print("\nConsideration Time: " + str(consid_end - consid_start))
 
     full_speed_end = time.clock()
     print('\nFull Process Speed: ' + str(full_speed_end - full_speed_start))

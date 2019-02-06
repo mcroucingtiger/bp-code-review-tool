@@ -69,8 +69,8 @@ def test_with_local():
                    "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
     release_path_ = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
                     "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
-    release_path = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"  # Three considerations active
-    release_path_ = "C:/Users/MorganCrouch/Desktop/Big Testing Release.bprelease"  # All Actions used attach - forced result, exception stages have exception detalil (ignores goldard test object), ignores object has attach
+    release_path_ = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
+    release_path = "C:/Users/MorganCrouch/Desktop/Big Testing Release.bprelease"
 
     xml_string = get_local_xml(release_path)
 
@@ -84,7 +84,7 @@ def test_with_local():
             metadata = extract_metadata(sub_soups.metadata)
             active_object_consideration_classes, active_process_consideration_classes = get_active_considerations(metadata)
         except:
-            print("Unable to find the header in the XML")
+            print("!!! Unable to find the header in the XML !!!")  # Only for testing
 
         # print(sub_soups.objects.prettify())
 
@@ -243,7 +243,7 @@ def get_active_considerations(metadata):
 
     # Retrieve active Object Considerations
     for consideration_status_dict in active_considerations_object:
-        if consideration_status_dict['Active']:  # Consideration is active
+        if consideration_status_dict['Active']:  # Consideration is active from metadata
             report_consideration_name = consideration_status_dict['Object Considerations']
             for object_class in object_consideration_classes:
                 class_consideration_name = object_class[1].CONSIDERATION_NAME
@@ -306,7 +306,7 @@ def make_report_object(soup_object, active_object_consideration_classes, metadat
 
                     temp_consideration = object_consideration()
                     if force_result == score_scale == '':
-                        temp_consideration.check_consideration(soup_object)
+                        temp_consideration.check_consideration(soup_object, metadata)
                         temp_consideration.evaluate_score_and_result()
                     else:
                         temp_consideration.evaluate_score_and_result(float(score_scale), force_result)

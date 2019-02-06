@@ -7,15 +7,14 @@ class Consideration(ABC):
     """Abstract class used as the parent for all consideration classes."""
     CONSIDERATION_NAME = "Override - Title from Report"
 
-    def __init__(self, consideration_name, max_score=10):
+    def __init__(self, max_score=10):
         self.score = max_score
         self.max_score = max_score
-        self.name = consideration_name
         self.result = Result.YES
-        self.errors = []
+        self.errors_list = []
 
     @abstractmethod
-    def check_consideration(self, soup: BeautifulSoup):
+    def check_consideration(self, soup: BeautifulSoup, metadata):
         """Check for error cases within the given soup for each specific report consideration.
 
         All errors found are appended to the object's self.errors list, with each error being a dict.
@@ -29,7 +28,7 @@ class Consideration(ABC):
         """
         # If no forced result is given from the Config file
         if not forced_score_scale and not forced_result:
-            if self.errors:
+            if self.errors_list:
                 self.score = 0
                 self.result = Result.NO
             else:
@@ -42,6 +41,6 @@ class Consideration(ABC):
     # Doesn't need to be overridden
     def add_to_report(self, report_helper):
         """Add the consideration and its errors' within the the report_helper's considerations list."""
-        report_helper.set_consideration(self.name, self.max_score, self.score, self.result)
-        for error in self.errors:
-            report_helper.set_error(self.name, error)
+        report_helper.set_consideration(self.CONSIDERATION_NAME, self.max_score, self.score, self.result)
+        for error in self.errors_list:
+            report_helper.set_error(self.CONSIDERATION_NAME, error)
