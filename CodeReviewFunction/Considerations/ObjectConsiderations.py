@@ -253,6 +253,7 @@ class CheckActionsUseAttach(Consideration):
 
 # Topic: Correct use of Wait Stages
 class CheckActionStartWait(Consideration):
+    # TODO: Tomorrow - Test how this goes with creating report
     CONSIDERATION_NAME = "Does each action start with a Wait Stage to verify " \
                          "the application is in the correct state?"
 
@@ -263,68 +264,44 @@ class CheckActionStartWait(Consideration):
                                   'send key']
         BLACKLIST_OBJECT_NAMES = ['wrapper']
 
-        start_stages = soup.find_all('stage', type='Start', recursive=False)
         action_pages = soup.find_all('subsheet', recursive=False)
-        page_reference_stages = soup.find_all('stage', type='SubSheet')
-
-        start_stage_ids = []
-        for start_stage in start_stages:
-            if start_stage.subsheetid:
-                start_stage_id = start_stage.subsheetid.string
-                start_stage_ids.append(start_stage_id)
+        start_stages = soup.find_all('stage', type='Start', recursive=False)
 
         if object_not_blacklisted(BLACKLIST_OBJECT_NAMES, soup):
             # Iterate over all Actions in the Object
             for action_page in action_pages:
                 action_name = action_page.next_element.string
                 if action_not_blacklisted(BLACKLIST_ACTION_NAMES, action_name):
-                    # Check Action starts with attach
                     action_subsheet_id = action_page.get('subsheetid')
-                    # Goes through all start stages in the object
+                    # Goes through all start stages in the Object
                     for start_stage in start_stages:
                         # Finds the start stage of the current Action
-                        # Use next_element as init has no subsheet tag
                         if start_stage.subsheetid:
                             if start_stage.subsheetid.string == action_subsheet_id:
                                 success_stage = get_onsuccess_tag(start_stage, soup)
-                                if success_stage.get('type') == 'SubSheet':
+                                if success_stage.get('type') == 'SubSheet':  # Next stage a subsheet (Attach)
                                     success_stage = get_onsuccess_tag(success_stage, soup)
-                                    if success_stage.get('type') == 'WaitStart':
-                                        if len(success_stage.choices.contents) > 0:
+                                    if success_stage.get('type') == 'WaitStart':  # Following stage a Wait
+                                        if len(success_stage.choices.contents) > 0:  # Wait has conditions
+                                            check_exists = False
                                             for choice in success_stage.choices.contents:
                                                 choice = choice.condition.id.string
                                                 if 'exists' in choice.lower():
-                                                    print("Success: " + action_name)
+                                                    check_exists = True
+                                                    break
+                                            if not check_exists:
+                                                error_str = "Wait stage following Attach, but no 'Check Exists'"
+                                                self.errors_list.append(error_as_dict(error_str, action_name))
+                                                print("**** CHECK OUT - Haven't tested ***" + error_str)
                                         else:
-                                            print(' --- Wait with no checks')
+                                            error_str = "Wait stage following Attach has no conditions"
+                                            self.errors_list.append(error_as_dict(error_str, action_name))
                                     else:
-                                        print('Attach but then no Wait stage: ' + action_name)
+                                        error_str = "Attach page not followed by a Wait stage"
+                                        self.errors_list.append(error_as_dict(error_str, action_name))
                                 else:
-                                    print('Action doesnt start with Attach: ' + action_name)
-
-
-
-                       # self.errors_list.append(error_as_dict("", action_name))
-
-
-
-    @staticmethod
-    def _get_stage_after_attach(action_page, start_stages, soup: BeautifulSoup):
-        subsheet_id = action_page.get('subsheetid')
-        # Goes through all start stages in the object
-        for start_stage in start_stages:
-            # Finds the start stage of the current Action
-            if start_stage.subsheetid.string == subsheet_id:
-                success_stage = get_onsuccess_tag(start_stage, soup)
-                if success_stage.get('type') == 'SubSheet':
-                    success_stage = get_onsuccess_tag(success_stage, soup)
-                    if success_stage.get('type') == 'WaitStart':
-                        pass
-
-
-
-
-        return False
+                                    error_str = 'Action doesnt start with Attach'
+                                    self.errors_list.append(error_as_dict(error_str, action_name))
 
     def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
         """Calculate the consideration's score and result."""
@@ -339,10 +316,10 @@ class CheckActionStartWait(Consideration):
                     return
 
             if self.errors_list:
-                if len(self.errors_list) <= 3:
+                if len(self.errors_list) <= 1:
                     self.score = self.max_score * 0.7
                     self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 6:
+                elif 2 <= len(self.errors_list) <= 4:
                     self.score = self.max_score * 0.3
                     self.result = Result.INFREQUENTLY
                 else:

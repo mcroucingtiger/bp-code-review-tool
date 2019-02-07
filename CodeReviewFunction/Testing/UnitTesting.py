@@ -6,7 +6,7 @@ from ..Considerations.ObjectConsiderations import *
 from ..Considerations.ProcessConsiderations import *
 
 _release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
-_release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
+release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
                "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
 _release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
                "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
@@ -59,11 +59,11 @@ if __name__ == '__main__':
     full_speed_start = time.clock()
 
     # --- To Use Raw XML ---
-    #sub_soups = deserialize_to_soup(extract_pickled_soups(get_local_xml(release_path)))
+    sub_soups = deserialize_to_soup(extract_pickled_soups(get_local_xml(release_path)))
 
     # -- To Use Pre-Pickled ---
-    pickled_results = get_local_pickled_results()
-    sub_soups = deserialize_to_soup(pickled_results)
+    #pickled_results = get_local_pickled_results()
+    #sub_soups = deserialize_to_soup(pickled_results)
 
     print_sub_soups_contents(sub_soups)
 
