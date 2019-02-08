@@ -7,15 +7,30 @@ from ..Considerations.ProcessConsiderations import *
 
 
 # Main
-_release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
-               "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
-release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
-               "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
-_release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/Test Releases Good/MERS v1.0.bprelease"
+release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+               "/Testing/SAM Processed XML/LAMP.xml"
+release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                "/Testing/SAM Processed XML/MERS.xml"
+release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                "/Testing/SAM Processed XML/MI Report.xml"
+release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                "/Testing/SAM Processed XML/Multi-Process.xml"
+# Additional
+release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
+release_path_ = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
+release_path_ = "C:/Users/MorganCrouch/Desktop/test.bprelease"
+
 # My Tests
-_release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
-_release_path = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
-_release_path = "C:/Users/MorganCrouch/Desktop/test.bprelease"
+pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                "/Testing/Fixtures/LAMP_pickled_soups.txt"
+pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                "/Testing/Fixtures/MERS_pickled_soup.txt"
+pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                "/Testing/Fixtures/MI_Premium_pickled_soups.txt"
+pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                "/Testing/Fixtures/multi_process_pickled_soups.txt"
+
+
 
 
 def has_attr_bpversion(tag):
@@ -48,10 +63,8 @@ def print_name_objectsoup(object_soup):
     print(object_soup.contents[0].get('name'))
 
 
-def get_local_pickled_results():
+def get_local_pickled_results(file_location):
     """Get results list from the pickled version saved in file"""
-    file_location = 'C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction' \
-                    '/Testing/Fixtures/MI_Premium_pickled_soups.txt'
     with open(file_location, 'rb') as file:
         results = pickle.load(file)
     return results
@@ -60,12 +73,10 @@ def get_local_pickled_results():
 if __name__ == '__main__':
     print('__main__ running for UnitTesting')
     full_speed_start = time.clock()
-
     # --- To Use Raw XML ---
     sub_soups = deserialize_to_soup(extract_pickled_soups(get_local_xml(release_path)))
-
     # -- To Use Pre-Pickled ---
-    #pickled_results = get_local_pickled_results()
+    #pickled_results = get_local_pickled_results(pickled_path)
     #sub_soups = deserialize_to_soup(pickled_results)
 
     print_sub_soups_contents(sub_soups)
@@ -75,7 +86,7 @@ if __name__ == '__main__':
         object_name = soup_object.get('name')
         print('\n=== Current Object: ' + object_name + " ===")
 
-        consideration = CheckNoOverlyComplexActions()
+        consideration = CheckFocusUsedForGlobals()
         consideration.check_consideration(soup_object, None)
     consid_end = time.clock()
 

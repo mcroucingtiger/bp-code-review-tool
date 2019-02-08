@@ -64,13 +64,16 @@ def test_with_local():
     report_pages = []
     print("Getting release off desktop")
 
-    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
-    release_path_ = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
-                   "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
-    release_path_ = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
-                    "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
-    release_path_ = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
-    release_path = "C:/Users/MorganCrouch/Desktop/Big Testing Release.bprelease"
+    # Raw Releases
+    release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                    "/Testing/SAM Processed XML/LAMP.xml"
+    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                    "/Testing/SAM Processed XML/MERS.xml"
+    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                    "/Testing/SAM Processed XML/MI Report.xml"
+    # With header information
+    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                   "/Testing/SAM Processed XML/Multi-Process.xml"
 
     xml_string = get_local_xml(release_path)
 
@@ -82,12 +85,13 @@ def test_with_local():
         # --- Delete after testing
         try:
             metadata = extract_metadata(sub_soups.metadata)
-            active_object_consideration_classes, active_process_consideration_classes = get_active_considerations(metadata)
+            active_object_consideration_classes, active_process_consideration_classes\
+                = get_active_considerations(metadata)
         except:
             print("!!! Unable to find the header in the XML !!!")  # Only for testing
 
         # print(sub_soups.objects.prettify())
-
+        start_processing = time.clock()
         for object_tag in sub_soups.objects:
             report_page_dict = make_report_object(object_tag, active_object_consideration_classes, metadata)
             report_pages.append(report_page_dict)
@@ -101,6 +105,7 @@ def test_with_local():
 
         json_report = json.dumps(report_pages)
         print(json_report)
+        print("\nProcessing Time: " + str(time.clock() - start_processing))
 
     else:
         print("XML wasn't read")
@@ -121,8 +126,9 @@ def get_local_xml(path):
 # Testing only
 def pickle_results_list(results):
     """Pickle the results list and save to a file to skip this step when testing"""
-    file_location = 'C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction/Testing/MI_Premium_pickled_soups.txt'
-    with open(file_location,'wb', encoding="utf8") as file:
+    file_location = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                    "/Testing/Fixtures/LAMP_pickled_soups.txt"
+    with open(file_location, 'wb') as file:
         pickle.dump(results, file)
 
 
@@ -194,13 +200,10 @@ def extract_metadata(soup_metadata: BeautifulSoup):
     # Get each JSON string from the header tag in the XML and parses the JSON string into a python data type.
     coversheet_info_str = soup_metadata.find('coversheetinformation').string
     metadata['coversheet info'] = json.loads(coversheet_info_str)
-
     additional_info_str = soup_metadata.find('additionalreleaseinformation').string
     metadata['additional info'] = json.loads(additional_info_str)
-
     blacklist_str = soup_metadata.find('blacklist').string
     metadata['blacklist'] = json.loads(blacklist_str)
-
     settings_str = soup_metadata.find('settings').string
     metadata['settings'] = json.loads(settings_str)
 

@@ -554,8 +554,7 @@ class CheckNoActionCalledInAction(Consideration):
 class CheckNoOverlyComplexActions(Consideration):
     CONSIDERATION_NAME = "Checked there are no overly complex pages that could be broken up?"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         """Go through all stages in an Object and check that none are Action stages."""
@@ -568,8 +567,8 @@ class CheckNoOverlyComplexActions(Consideration):
             current_action_stages = []
             # Get all applicable stages that exist in that Action page
             for stage in all_stages:
-                if stage.subsheetid and action_id == stage.subsheetid.string:
-                    if stage.get('type') not in IGNORE_TYPES:
+                if stage.get('type') not in IGNORE_TYPES:
+                    if stage.subsheetid and action_id == stage.subsheetid.string:
                         current_action_stages.append(stage)
 
             action_stages_count = len(current_action_stages)
@@ -577,7 +576,6 @@ class CheckNoOverlyComplexActions(Consideration):
                 error_str = "'{}' Action has more than {} stages ({})"\
                     .format(action_name, Settings.MAX_PAGE_STAGES, action_stages_count)
                 self.errors_list.append(error_as_dict(error_str, action_name))
-
 
     def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
         """Calculate the consideration's score and result."""
@@ -637,8 +635,7 @@ class CheckExceptionDetails(Consideration):
 class CheckExceptionType(Consideration):
     CONSIDERATION_NAME = "Do Exception Types follow Best Practice?"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         EXCEPTION_TYPE_WHITELIST = ['system exception', 'business exception',
@@ -748,9 +745,6 @@ class CheckImageDefinitionsEfficient(Consideration):
         super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        WIDTH_MAX = 400
-        HEIGHT_MAX = 400
-
         data_stages = soup.find_all('stage', type='Data', recursive=False)
         for data_stage in data_stages:
             if data_stage.datatype.string == 'image':
@@ -772,10 +766,10 @@ class CheckImageDefinitionsEfficient(Consideration):
                         else:
                             break
 
-                if int(width) > WIDTH_MAX:
+                if int(width) > Settings.MAX_WIDTH:
                     action_subsheets = get_action_subsheets(soup)
                     action_name = subsheetid_to_action(data_stage.subsheetid.string, action_subsheets)
-                    if int(height) > HEIGHT_MAX:
+                    if int(height) > Settings.MAX_HEIGHT:
                         error_str = "Data Item '{}' has Height: {} and Width: {}" \
                             .format(data_stage.get('name'), height, width)
                         self.errors_list.append(error_as_dict(error_str, action_name))
@@ -784,7 +778,7 @@ class CheckImageDefinitionsEfficient(Consideration):
                             .format(data_stage.get('name'), width)
                         self.errors_list.append(error_as_dict(error_str, action_name))
 
-                elif int(height) > HEIGHT_MAX:
+                elif int(height) > Settings.MAX_HEIGHT:
                     action_subsheets = get_action_subsheets(soup)
                     action_name = subsheetid_to_action(data_stage.subsheetid.string, action_subsheets)
                     error_str = "Data Item '{}' has Height: {}" \
@@ -807,3 +801,43 @@ class CheckImageDefinitionsEfficient(Consideration):
                     self.score = 0
                     self.result = Result.NO
 
+
+# Topic: Application Focus
+class CheckFocusUsedForGlobals(Consideration):
+    CONSIDERATION_NAME = "Is Focus ensured when required? For using Globals and Image Recognition?"
+
+    def __init__(self): super().__init__()
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        navigate_stages = soup.find_all('stage', type='Navigate', recursive=False)
+        read_stages = soup.find_all('stage', type='Read', recursive=False)
+        WHITELIST_STEPS = ['mouseclick', 'sendkey']
+
+        action_subsheets = get_action_subsheets(soup)
+
+        for navigate_stage in navigate_stages:
+            stage_name = navigate_stage.get('name')
+            steps = navigate_stage.find_all('step', recursive=False)
+            for step in steps:
+                step_name = step.action.id.string
+                action_name = subsheetid_to_action(navigate_stage.subsheetid.string, action_subsheets)
+                print("{} --{} -- {}".format(step_name, stage_name, action_name))
+                # if any(whitelist_step in step_name.lower() for whitelist_step in WHITELIST_STEPS):
+                #     print(step_name)
+
+
+    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
+        """Calculate the consideration's score and result."""
+        # Super call to deal with when a forced scale/result is given
+        super().evaluate_score_and_result(forced_score_scale, forced_result)
+        if not forced_score_scale and not forced_result:
+            if self.errors_list:
+                if len(self.errors_list) <= 2:
+                    self.score = self.max_score * 0.7
+                    self.result = Result.FREQUENTLY
+                elif 2 <= len(self.errors_list) <= 3:
+                    self.score = self.max_score * 0.3
+                    self.result = Result.INFREQUENTLY
+                else:
+                    self.score = 0
+                    self.result = Result.NO
