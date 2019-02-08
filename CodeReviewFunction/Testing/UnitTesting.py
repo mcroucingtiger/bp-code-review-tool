@@ -5,12 +5,15 @@ import pickle
 from ..Considerations.ObjectConsiderations import *
 from ..Considerations.ProcessConsiderations import *
 
-_release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
-release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
-               "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
+
+# Main
 _release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
+               "Test Releases Good/MI Premium Payments - Backup Release v2.0.bprelease"
+release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/" \
                "Test Releases Good/LAMP - Send Correspondence_V01.01.01_20181214.bprelease"
 _release_path = "C:/Users/MorganCrouch/Documents/Reveal Group/Auto Code Review/Test Releases Good/MERS v1.0.bprelease"
+# My Tests
+_release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
 _release_path = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
 _release_path = "C:/Users/MorganCrouch/Desktop/test.bprelease"
 
@@ -48,7 +51,7 @@ def print_name_objectsoup(object_soup):
 def get_local_pickled_results():
     """Get results list from the pickled version saved in file"""
     file_location = 'C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction' \
-                    '/Testing/Fixtures/results_big_testing.txt'
+                    '/Testing/Fixtures/MI_Premium_pickled_soups.txt'
     with open(file_location, 'rb') as file:
         results = pickle.load(file)
     return results
@@ -72,7 +75,7 @@ if __name__ == '__main__':
         object_name = soup_object.get('name')
         print('\n=== Current Object: ' + object_name + " ===")
 
-        consideration = CheckActionStartWait()
+        consideration = CheckNoOverlyComplexActions()
         consideration.check_consideration(soup_object, None)
     consid_end = time.clock()
 

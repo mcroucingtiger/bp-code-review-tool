@@ -121,7 +121,7 @@ def get_local_xml(path):
 # Testing only
 def pickle_results_list(results):
     """Pickle the results list and save to a file to skip this step when testing"""
-    file_location = 'C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction/Testing/results_big_testing.txt'
+    file_location = 'C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction/Testing/MI_Premium_pickled_soups.txt'
     with open(file_location,'wb', encoding="utf8") as file:
         pickle.dump(results, file)
 

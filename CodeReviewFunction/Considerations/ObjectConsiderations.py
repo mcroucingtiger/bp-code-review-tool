@@ -4,6 +4,7 @@ import inspect
 import sys
 from ..ReportPage import error_as_dict, Result
 from .ConsiderationAbstract import Consideration
+from .. import Settings
 
 
 # --- Utility functions ---
@@ -253,13 +254,13 @@ class CheckActionsUseAttach(Consideration):
 
 # Topic: Correct use of Wait Stages
 class CheckActionStartWait(Consideration):
-    # TODO: Tomorrow - Test how this goes with creating report
     CONSIDERATION_NAME = "Does each action start with a Wait Stage to verify " \
                          "the application is in the correct state?"
 
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
+        """Check if each Action starts with an Attach page reference followed by a Wait 'Check Exists' stage."""
         BLACKLIST_ACTION_NAMES = ['launch', 'close', 'terminate', 'attach', 'initialise', 'clean up', 'detach',
                                   'send key']
         BLACKLIST_OBJECT_NAMES = ['wrapper']
@@ -517,7 +518,7 @@ class CheckNoActionCalledInAction(Consideration):
         """Go through all stages in an Object and check that none are Action stages."""
         BLACKLIST_OBJECT_NAMES = ['wrapper']
         if object_not_blacklisted(BLACKLIST_OBJECT_NAMES, soup):
-            action_stages = soup.find_all('stage', {'type': 'Action'}) # TODO: Check if this works. Usually type=Action
+            action_stages = soup.find_all('stage', {'type': 'Action'})  # TODO: Check if this works. Usually type=Action
             subsheets = soup.find_all('subsheet')
             if action_stages:
                 # Goes through all found Action stages and gets their subsheetid location
@@ -543,6 +544,51 @@ class CheckNoActionCalledInAction(Consideration):
                     self.score = self.max_score * 0.7
                     self.result = Result.FREQUENTLY
                 elif 2 <= len(self.errors_list) <= 4:
+                    self.score = self.max_score * 0.3
+                    self.result = Result.INFREQUENTLY
+                else:
+                    self.score = 0
+                    self.result = Result.NO
+
+
+class CheckNoOverlyComplexActions(Consideration):
+    CONSIDERATION_NAME = "Checked there are no overly complex pages that could be broken up?"
+
+    def __init__(self):
+        super().__init__()
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        """Go through all stages in an Object and check that none are Action stages."""
+        IGNORE_TYPES = ['SubSheetInfo', 'ProcessInfo', 'Note', 'Data', 'Collection', 'Block', 'Anchor', 'WaitEnd']
+
+        action_subsheets = get_action_subsheets(soup)
+        all_stages = soup.find_all('stage', recursive=False)
+
+        for action_id, action_name in action_subsheets:
+            current_action_stages = []
+            # Get all applicable stages that exist in that Action page
+            for stage in all_stages:
+                if stage.subsheetid and action_id == stage.subsheetid.string:
+                    if stage.get('type') not in IGNORE_TYPES:
+                        current_action_stages.append(stage)
+
+            action_stages_count = len(current_action_stages)
+            if action_stages_count > Settings.MAX_PAGE_STAGES:
+                error_str = "'{}' Action has more than {} stages ({})"\
+                    .format(action_name, Settings.MAX_PAGE_STAGES, action_stages_count)
+                self.errors_list.append(error_as_dict(error_str, action_name))
+
+
+    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
+        """Calculate the consideration's score and result."""
+        # Super call to deal with when a forced scale/result is given
+        super().evaluate_score_and_result(forced_score_scale, forced_result)
+        if not forced_score_scale and not forced_result:
+            if self.errors_list:
+                if len(self.errors_list) <= 3:
+                    self.score = self.max_score * 0.7
+                    self.result = Result.FREQUENTLY
+                elif 2 <= len(self.errors_list) <= 5:
                     self.score = self.max_score * 0.3
                     self.result = Result.INFREQUENTLY
                 else:
@@ -636,6 +682,57 @@ class CheckExceptionType(Consideration):
 
 
 # Topic: Logging
+class CheckLoggingAdhereToPolicy(Consideration):
+    """Checks if any stages have logging turned on when Process is in production,
+
+    Check ignores Exception stages, which it allows logging to remain on for in Production.
+    This check also ignores any stages where logging is not an option that can be turned off.
+    """
+    CONSIDERATION_NAME = "Does logging adhere to local Security Policy?"
+
+    def __init__(self):
+        super().__init__()
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        IGNORE_TYPES = ['SubSheetInfo', 'ProcessInfo', 'Note', 'Data', 'Collection', 'Block', 'Anchor']
+        if metadata['additional info']['Delivery Stage'] == 'Production':
+            action_subsheets = get_action_subsheets(soup)
+            all_stages = soup.find_all('stage', recursive=False)
+
+            for stage in all_stages:
+                stage_name = stage.get('name')
+                stage_type = stage.get('type')
+
+                if stage_type not in IGNORE_TYPES:
+                    if stage.loginhibit:
+                        if stage.loginhibit.get('onsuccess'):
+                            # Ready for if SAM business rules are updated
+                            # print("Error Only: {} of  {}".format(stage_name, stage_type))
+                            pass
+                        else:
+                            # print("Disabled: {} of  {}".format(stage_name, stage_type))
+                            pass
+                    elif stage_type != 'Exception':
+                        if stage.subsheetid:
+                            action_name = subsheetid_to_action(stage.subsheetid.string, action_subsheets)
+                        error_str = "Logging Enabled: {} stage '{}'".format(stage_type, stage_name)
+                        self.errors_list.append(error_as_dict(error_str, action_name))
+
+    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
+        """Calculate the consideration's score and result."""
+        # Super call to deal with when a forced scale/result is given
+        super().evaluate_score_and_result(forced_score_scale, forced_result)
+        if not forced_score_scale and not forced_result:
+            if self.errors_list:
+                if len(self.errors_list) <= 3:
+                    self.score = self.max_score * 0.7
+                    self.result = Result.FREQUENTLY
+                elif 2 <= len(self.errors_list) <= 6:
+                    self.score = self.max_score * 0.3
+                    self.result = Result.INFREQUENTLY
+                else:
+                    self.score = 0
+                    self.result = Result.NO
 
 
 # Topic: Images
