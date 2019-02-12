@@ -12,6 +12,7 @@ class Consideration(ABC):
         self.max_score = max_score
         self.result = Result.YES
         self.errors_list = []
+        self.warning_list = []
 
     @abstractmethod
     def check_consideration(self, soup: BeautifulSoup, metadata):
@@ -41,6 +42,6 @@ class Consideration(ABC):
     # Doesn't need to be overridden
     def add_to_report(self, report_helper):
         """Add the consideration and its errors' within the the report_helper's considerations list."""
-        report_helper.set_consideration(self.CONSIDERATION_NAME, self.max_score, self.score, self.result)
-        for error in self.errors_list:
-            report_helper.set_error(self.CONSIDERATION_NAME, error)
+        report_helper.set_consideration(self.CONSIDERATION_NAME, self.max_score, self.score, self.result,
+                                        self.errors_list, self.warning_list)
+

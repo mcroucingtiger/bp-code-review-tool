@@ -15,10 +15,11 @@ class ReportPage:
     """"Class to manage information within a report page.
 
     Categorises all error cases found into a structure of:
-    considerations (list) > consideration (dict) > errors (list) > error (dict)
-    and outputs a JSON to be returned to the HTTP Request.
+    ReportPage (object) > considerations (list) > consideration (dict) > errors (list) > error (dict)
+    The ReportPage is converted to a dict, so the final process output can be converted to a
+    JSON to be returned to the HTTP Request.
 
-    Any methods with a Beautiful Soup parameter accept only the tag of a single Object or Process.
+    Any methods with a BeautifulSoup parameter accept only the Tag of a single Object or Process.
 
     Attributes:
           considerations (list): List of considerations that have been processed for this report page
@@ -31,12 +32,18 @@ class ReportPage:
     def __init__(self):
         self.considerations = []
         self.page_type = None
+        self.object_type = None
         self.page_name = None
         self.actions = []
 
-    def set_page_type(self, page_type, soup: BeautifulSoup):
-        """Set the type of report page as Process/Object and gets Object's Actions """
+    def set_page_header_info(self, page_type, soup: BeautifulSoup, object_type=None, estimated=False):
+        """Set the type of report page as Process/Object and gets Object's name and Actions."""
         self.page_type = page_type
+
+        if estimated:
+            self.object_type = object_type + " (Estimated)"
+        else:
+            self.object_type = object_type
 
         if page_type == 'Process':
             self._set_page_name(soup)
@@ -58,38 +65,32 @@ class ReportPage:
                 self.actions.append(action.next_element.string)
         logging.info("Action names from BP Object extracted")
 
-    def set_error(self, consideration_name, error: dict):
-        """Add the error to the relevant topic and consideration"""
-        for consideration in self.considerations:
-            if consideration["Consideration Name"] == consideration_name:  # Checking consideration list
-                consideration['Errors'].append(error)
-                break
-
-    def set_consideration(self, consideration_name, max_score, score, result):
+    def set_consideration(self, consideration_name, max_score, score, result, errors, warnings):
         """Create a consideration dict containing an errors list.
 
-        Default value is for success."""
-        self.considerations.append({'Consideration Name': consideration_name, 'Errors': [],
+        Default value is for success.
+        """
+        self.considerations.append({'Consideration Name': consideration_name, 'Errors': errors, 'Warnings': warnings,
                                     'Score': score, 'Max Score': max_score, 'Result': result})
-
-    def set_consideration_score(self, consideration_name, score, result):
-        """Set the consideration result if there are any error cases"""
-        for consideration in self.considerations:
-            if consideration["Consideration Name"] == consideration_name:
-                consideration['Score'] = score
-                consideration['Result'] = result
 
     def get_page_as_dict(self) -> dict:
         """Return a dict containing the report page information, considerations and the corresponding error data"""
         return {
             "Report Page Name": self.page_name,
             "Page Type": self.page_type,
+            "Object Type": self.object_type,
             "Object Actions": self.actions,
             "Report Considerations": self.considerations
         }
 
 
+# Helper Functions
 def error_as_dict(error_name, error_location) -> dict:
     """Create an error dict of {Error Name: ..., Error Location: ...}."""
     return {'Error Name': error_name, 'Error Location': error_location}
+
+
+def warning_as_dict(warning_name, warning_location) -> dict:
+    """Create an warning dict of {Warning Name: ..., Warning Location: ...}."""
+    return {'Warning Name': warning_name, 'Warning Location': warning_location}
 

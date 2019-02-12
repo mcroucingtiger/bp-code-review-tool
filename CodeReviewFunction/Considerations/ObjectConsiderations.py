@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup, Tag
 import logging
 import inspect
 import sys
-from ..ReportPage import error_as_dict, Result
+from ..ReportPage import error_as_dict, warning_as_dict, Result
 from .ConsiderationAbstract import Consideration
 from .. import Settings
 
@@ -76,11 +76,14 @@ def subsheetid_to_action(stage_subsheetid, action_subsheets)->str:
 # --- Object Considerations ---
 # Topic: Documentation
 class CheckActionsDocumentation(Consideration):
+    """Pre/Post conditions are only required for Base Objects.
+
+    If either is not found in a Wrapper, it is flagged as a Warning.
+    """
     CONSIDERATION_NAME = "Are Action descriptions, Pre-Conditions, Post Conditions, Input params & " \
                          "Output params documented to create a meaningful BOD?"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         BLACKLIST_ACTION_NAMES = ['attach', 'initialise', 'clean up', 'detach']
@@ -127,7 +130,6 @@ class CheckActionsDocumentation(Consideration):
                 if action_not_blacklisted(BLACKLIST_ACTION_NAMES, action_name):
                     conditions_documented = True
                     error_str = ""
-
                     if start_stage.preconditions is None:
                         conditions_documented = False
                         error_str += "No Precondition"
@@ -140,10 +142,17 @@ class CheckActionsDocumentation(Consideration):
                             error_str += "No Postcondition"
 
                     if not conditions_documented:
-                        self.errors_list.append(error_as_dict(error_str, action_name))
+                        # If the Object is a Wrapper, flag a warning. If it's a Base Object, flag as an error
+                        if Settings.OBJECT_TYPES['wrapper'] in metadata['object type']:
+                            error_str += ' in Wrapper'
+                            self.warning_list.append(warning_as_dict(error_str, action_name))
+                        else:
+                            self.errors_list.append(error_as_dict(error_str, action_name))
 
     def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
         """Calculate the consideration's score and result."""
+        self.max_score = 5
+
         # Super call to deal with when a forced scale/result is given
         super().evaluate_score_and_result(forced_score_scale, forced_result)
         if not forced_score_scale and not forced_result:
@@ -174,8 +183,9 @@ class CheckObjectExposureValid(Consideration):
     def check_consideration(self, soup: BeautifulSoup, metadata):
         object_run_mode = soup.get('runmode')
         application_modeller = soup.find('appdef', recursive=False)
+        inherits_app_model = soup.find('parentobject', recursive=False)
         # apptypeinfo only exists after running the App Modeller Wizard
-        if application_modeller.apptypeinfo:
+        if application_modeller.apptypeinfo or inherits_app_model:
             if object_run_mode == 'Background':
                 error_str = "Application Model exists for Object with Exposure set to Background"
                 self.errors_list.append(error_as_dict(error_str, "N/A"))
@@ -185,21 +195,21 @@ class CheckObjectExposureValid(Consideration):
 class CheckObjHasAttach(Consideration):
     """"Does the Business Object have an 'Attach' Action that reads the connected status before Attaching?
 
-    Ignores Wrapper objects."""
+    Ignores Wrapper objects.
+    """
     CONSIDERATION_NAME = "Does the Business Object have an 'Attach' Action " \
                          "that reads the connected status before Attaching?"
 
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        """Go through an object and ensure at least one page contains the word 'Attach'
-        """
-        BLACKLIST_OBJECT_NAMES = ['wrapper']
-        if object_not_blacklisted(BLACKLIST_OBJECT_NAMES, soup):
+        """Go through an object and ensure at least one page contains the word 'Attach'."""
+        # Wrapper Objects do not require an Attach
+        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
             attach_found = False
-            subsheets = soup.find_all('subsheet')  # Find all page names
+            subsheets = soup.find_all('subsheet', recursive=False)  # Find all page names
             for subsheet in subsheets:
-                if subsheet.next_element.string.lower().find("attach") >= 0:  # A page has the work 'Attach' in it
+                if subsheet.next_element.string.lower().find("attach") >= 0:  # A page has the word 'Attach' in it
                     attach_found = True
                     # TODO: Ensure this page also has a read attached stage (maybe)
                     break
@@ -211,22 +221,20 @@ class CheckObjHasAttach(Consideration):
 class CheckActionsUseAttach(Consideration):
     CONSIDERATION_NAME = "Do all Actions use the Attach action?"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata) -> list:
         """Goes through all Actions to check if they start with an Attach stage."""
         # TODO: Ask Xave if close and terminate get to be skipped or are they needed?
         BLACKLIST_ACTION_NAMES = ['launch', 'close', 'terminate', 'attach', 'initialise', 'clean up', 'detach',
                                   'send key']
-        BLACKLIST_OBJECT_NAMES = ['wrapper']
 
         start_stages = soup.find_all('stage', type='Start', recursive=False)
         action_pages = soup.find_all('subsheet', recursive=False)
         page_reference_stages = soup.find_all('stage', type='SubSheet')
 
-        if object_not_blacklisted(BLACKLIST_OBJECT_NAMES, soup):
-            # Iterate over all Actions in the Object
+        # Wrapper Actions do not require an Attach as the first stage as each contained Action will have an Attach
+        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
             for action_page in action_pages:
                 action_name = action_page.next_element.string
                 # Check the Action does not contain a word from the blacklist
@@ -263,12 +271,12 @@ class CheckActionStartWait(Consideration):
         """Check if each Action starts with an Attach page reference followed by a Wait 'Check Exists' stage."""
         BLACKLIST_ACTION_NAMES = ['launch', 'close', 'terminate', 'attach', 'initialise', 'clean up', 'detach',
                                   'send key']
-        BLACKLIST_OBJECT_NAMES = ['wrapper']
 
         action_pages = soup.find_all('subsheet', recursive=False)
         start_stages = soup.find_all('stage', type='Start', recursive=False)
 
-        if object_not_blacklisted(BLACKLIST_OBJECT_NAMES, soup):
+        # Wrapper Actions do not require an Attach as the first stage as each contained Action will have an Attach
+        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
             # Iterate over all Actions in the Object
             for action_page in action_pages:
                 action_name = action_page.next_element.string
@@ -335,8 +343,7 @@ class CheckGlobalTimeoutUsedWaits(Consideration):
     CONSIDERATION_NAME = "Global variable enable a quick change to timeout values when application " \
                          "behaviour dictates."
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         # Don't check wait stages if Surface Automation used
@@ -392,8 +399,7 @@ class CheckWaitUsesDataItem(Consideration):
     CONSIDERATION_NAME = "Do Wait Stages have conditions (i.e. not arbitrary)? " \
                          "Do not include Arbitrary Waits if used for Surface Automation purposes only?"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         """Check that all Wait stages use a Data Item as their timeout value.
@@ -437,8 +443,7 @@ class CheckWaitTimeoutToException(Consideration):
     """
     CONSIDERATION_NAME = "Do Wait Stages timeout to an exception?"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         wait_end_stages = soup.find_all('stage', type='WaitEnd', recursive=False)
@@ -511,28 +516,33 @@ class CheckWaitTimeoutToException(Consideration):
 class CheckNoActionCalledInAction(Consideration):
     CONSIDERATION_NAME = "No Actions call other published Actions?"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        """Go through all stages in an Object and check that none are Action stages."""
-        BLACKLIST_OBJECT_NAMES = ['wrapper']
-        if object_not_blacklisted(BLACKLIST_OBJECT_NAMES, soup):
-            action_stages = soup.find_all('stage', {'type': 'Action'})  # TODO: Check if this works. Usually type=Action
-            subsheets = soup.find_all('subsheet')
-            if action_stages:
-                # Goes through all found Action stages and gets their subsheetid location
-                for action_stage in action_stages:
-                    if action_stage.next_element.name == 'subsheetid':
-                        action_subsheetid = action_stage.next_element.string
-                        # Find the subsheet name from the subsheetid
-                        for subsheet in subsheets:
-                            if subsheet.get('subsheetid') == action_subsheetid:
-                                location = subsheet.next_element.string
-                                self.errors_list.append(error_as_dict(action_stage.get('name'), location))
-                                break
+        """Go through all stages in an Object and check that none are Action stages.
+
+        Wrapper objects and Surface Automation Base objects are allowed to call Actions. Will show uses of the
+        'Sleep' Action as a warning.
+        """
+        action_subsheets = get_action_subsheets(soup)
+        action_stages = soup.find_all('stage', type='Action', recursive=False)
+        if action_stages:
+            # Goes through all found Action stages and gets their subsheetid location
+            for action_stage in action_stages:
+                if action_stage.next_element.name == 'subsheetid':
+                    action_stage_subsheetid = action_stage.next_element.string
+                    # Find the subsheet name from the subsheetid
+                    action_name = subsheetid_to_action(action_stage_subsheetid, action_subsheets)
+                    error_str = "Action '{}' called in Object".format(action_stage.get('name'))
+                    # Actions in the Base level are errors
+                    if metadata['object type'] == Settings.OBJECT_TYPES['base']:
+                        self.errors_list.append(error_as_dict(error_str, action_name))
                     else:
-                        print("Unable to find Action's subsheet id")
+                        # If its a Wrapper or Surface Automation Base, ignore the Sleep Actions
+                        # and flag other Actions as Warnings
+                        if action_stage.resource.get('action') == 'Sleep':
+                            error_str = "Sleep Action '{}' called in Object".format(action_stage.get('name'))
+                            self.warning_list.append(warning_as_dict(error_str, action_name))
 
     def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
         """Calculate the consideration's score and result."""
@@ -558,7 +568,8 @@ class CheckNoOverlyComplexActions(Consideration):
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         """Go through all stages in an Object and check that none are Action stages."""
-        IGNORE_TYPES = ['SubSheetInfo', 'ProcessInfo', 'Note', 'Data', 'Collection', 'Block', 'Anchor', 'WaitEnd']
+        IGNORE_TYPES = ['SubSheetInfo', 'ProcessInfo', 'Note', 'Data', 'Collection', 'Block',
+                        'Anchor', 'WaitEnd', 'Start']
 
         action_subsheets = get_action_subsheets(soup)
         all_stages = soup.find_all('stage', recursive=False)
@@ -599,17 +610,15 @@ class CheckExceptionDetails(Consideration):
     """Do all Exception stages have an exception detail?"""
     CONSIDERATION_NAME = "Do all Exception stages have an exception detail?"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        """Find all exception stages with empty an exception detail field and store them within the self.errors list
-        """
+        """Find all exception stages with empty an exception detail field and store them within the self.errors list."""
         logging.info("'CheckExceptionDetail method called")
-        exception_stages = soup.find_all('exception') # TODO: Does this even work???
+        exception_stages = soup.find_all('exception')
         for exception_stage in exception_stages:
-            if not exception_stage.get('detail') and not exception_stage.get(
-                    'usecurrent'):  # No detail and not preserve
+            # Exception has no detail and is not a preserve
+            if not exception_stage.get('detail') and not exception_stage.get('usecurrent'):
                 exception_name = exception_stage.parent.get('name')
                 parent_subsheet_id = exception_stage.parent.subsheetid.string
                 exception_page = soup.find('subsheet', {'subsheetid': parent_subsheet_id}).next_element.string
@@ -687,8 +696,7 @@ class CheckLoggingAdhereToPolicy(Consideration):
     """
     CONSIDERATION_NAME = "Does logging adhere to local Security Policy?"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         IGNORE_TYPES = ['SubSheetInfo', 'ProcessInfo', 'Note', 'Data', 'Collection', 'Block', 'Anchor']
@@ -741,8 +749,7 @@ class CheckImageDefinitionsEfficient(Consideration):
     """
     CONSIDERATION_NAME = "Are Target Images definitions efficient?"
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         data_stages = soup.find_all('stage', type='Data', recursive=False)
@@ -809,22 +816,74 @@ class CheckFocusUsedForGlobals(Consideration):
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
+        global_nav_subsheetids = []
+        global_read_subsheetids = []
+        activate_app_subsheetids = []
+        aafocus_subsheetids = []
+
         navigate_stages = soup.find_all('stage', type='Navigate', recursive=False)
         read_stages = soup.find_all('stage', type='Read', recursive=False)
-        WHITELIST_STEPS = ['mouseclick', 'sendkey']
-
         action_subsheets = get_action_subsheets(soup)
 
+        # Check if any Navigate stages contain steps requiring application at forefront
         for navigate_stage in navigate_stages:
             stage_name = navigate_stage.get('name')
             steps = navigate_stage.find_all('step', recursive=False)
             for step in steps:
                 step_name = step.action.id.string
-                action_name = subsheetid_to_action(navigate_stage.subsheetid.string, action_subsheets)
-                print("{} --{} -- {}".format(step_name, stage_name, action_name))
-                # if any(whitelist_step in step_name.lower() for whitelist_step in WHITELIST_STEPS):
-                #     print(step_name)
+                if step_name == 'ActivateApp':
+                    subsheetid = step.parent.subsheetid.string
+                    activate_app_subsheetids.append(subsheetid)
 
+                elif any(global_nav in step_name for global_nav in Settings.GLOBAL_NAV_STEPS):
+                    subsheetid = step.parent.subsheetid.string
+                    global_nav_subsheetids.append(subsheetid)
+
+                elif step_name == 'AAFocus':
+                    subsheetid = step.parent.subsheetid.string
+                    aafocus_subsheetids.append(subsheetid)
+
+        # Check if any Read stages contain steps requiring application at forefront
+        for read_stage in read_stages:
+            steps = read_stage.find_all('step', recursive=False)
+            for step in steps:
+                step_name = step.action.id.string
+                if any(global_read in step_name for global_read in Settings.GLOBAL_READ_STEPS):
+                    subsheetid = step.parent.subsheetid.string
+                    global_read_subsheetids.append(subsheetid)
+
+        # Removes duplicate subsheetids from lists
+        global_nav_subsheetids = list(dict.fromkeys(global_nav_subsheetids))
+        global_read_subsheetids = list(dict.fromkeys(global_read_subsheetids))
+        activate_app_subsheetids = list(dict.fromkeys(activate_app_subsheetids))
+        aafocus_subsheetids = list(dict.fromkeys(aafocus_subsheetids))
+
+        navs_with_no_activateapp = [global_nav_subsheetid for global_nav_subsheetid in global_nav_subsheetids
+                                    if global_nav_subsheetid not in activate_app_subsheetids]
+        reads_with_no_activateapp = [global_read_subsheetid for global_read_subsheetid in global_read_subsheetids
+                                     if global_read_subsheetid not in activate_app_subsheetids]
+        subsheets_using_focusaa = [subsheet_uses_focus for subsheet_uses_focus in aafocus_subsheetids
+                                   if subsheet_uses_focus not in activate_app_subsheetids]
+
+        if navs_with_no_activateapp:
+            for subsheet_using_focusaa in subsheets_using_focusaa:
+                # If Action has global nav, no activate app stage but has a FocusAA stage, add it to the warning list
+                if subsheet_using_focusaa in navs_with_no_activateapp:
+                    navs_with_no_activateapp.remove(subsheet_using_focusaa)
+                    action_name = subsheetid_to_action(subsheet_using_focusaa, action_subsheets)
+                    warning_str = "Global click or send key with a 'FocusAA' but no 'Activate Application' stage"
+                    self.warning_list.append(warning_as_dict(warning_str, action_name))
+
+            for nav_with_no_activate in navs_with_no_activateapp:
+                action_name = subsheetid_to_action(nav_with_no_activate, action_subsheets)
+                error_str = "Global click or send key in Action without an 'Activate Application' stage"
+                self.errors_list.append(error_as_dict(error_str, action_name))
+
+        if reads_with_no_activateapp:
+            for read_with_no_activateapp in reads_with_no_activateapp:
+                action_name = subsheetid_to_action(read_with_no_activateapp, action_subsheets)
+                error_str = "Global Read stage within Action without an 'Activate Application' stage"
+                self.errors_list.append(error_as_dict(error_str, action_name))
 
     def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
         """Calculate the consideration's score and result."""

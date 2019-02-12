@@ -9,6 +9,7 @@ from collections import namedtuple
 from .ReportPage import ReportPage, Result
 from .Considerations.ObjectConsiderations import object_consideration_module_classes
 from .Considerations.ProcessConsiderations import process_consideration_module_classes
+from . import Settings
 import pickle
 
 # logging.critical .error .warning .info .debug
@@ -43,7 +44,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             report_page_dict = make_report_process(process_tag, process_considerations, metadata)
             report_pages.append(report_page_dict)
 
-        report_page_dict = make_report_settings(metadata)
+        report_page_dict = make_report_settings_page(metadata)
         report_pages.append(report_page_dict)
 
         json_report = json.dumps(report_pages)
@@ -100,7 +101,7 @@ def test_with_local():
             report_page_dict = make_report_process(process_tag, active_process_consideration_classes, metadata)
             report_pages.append(report_page_dict)
 
-        report_page_dict = make_report_settings(metadata)
+        report_page_dict = make_report_settings_page(metadata)
         report_pages.append(report_page_dict)
 
         json_report = json.dumps(report_pages)
@@ -274,7 +275,7 @@ def get_active_considerations(metadata):
 def make_report_process(soup_process, active_process_considerations_classes, metadata):
     """Use the filtered soup of a single process tag element to generate the JSON for a page in the report."""
     report_page = ReportPage()
-    report_page.set_page_type('Process', soup_process)
+    report_page.set_page_header_info('Process', soup_process)
 
     logging.info("Running make_report_process function for " + report_page.page_name)
 
@@ -286,20 +287,20 @@ def make_report_process(soup_process, active_process_considerations_classes, met
 def make_report_object(soup_object, active_object_consideration_classes, metadata):
     """Use the filtered soup of a single object tag element to generate the JSON for a object page in the report."""
     report_page = ReportPage()
-    report_page.set_page_type('Object', soup_object)
+
+    current_object_name = soup_object.get('name').lower()
+    object_type, estimated = determine_object_type(current_object_name, soup_object)
+    metadata['object type'] = object_type
+    report_page.set_page_header_info('Object', soup_object, object_type, estimated)
+
     logging.info("Running make_report_object function for " + report_page.page_name)
 
     blacklist_objects = metadata['blacklist']
     metadata_active_objects = metadata['active considerations object']
 
-    # All modules intended for creating a object specific page in the report.
-    # 'if' statements are for the scoring of individual modules that have any errors.
-
-    current_object = soup_object.get('name').lower()
-
     for object_consideration in active_object_consideration_classes:
         # Check the Object name isn't a blacklisted object
-        if not any(ignored_object in current_object for ignored_object in blacklist_objects):
+        if not any(ignored_object in current_object_name for ignored_object in blacklist_objects):
             for active_object in metadata_active_objects:
                 # Find current consideration in the active consideration info of config file
                 if active_object['Object Considerations'] == object_consideration.CONSIDERATION_NAME:
@@ -318,10 +319,61 @@ def make_report_object(soup_object, active_object_consideration_classes, metadat
     return report_page.get_page_as_dict()
 
 
-def make_report_settings(metadata):
+def determine_object_type(object_name, soup_object: BeautifulSoup):
+    """Determine if a Object is a Wrapper, Base, or Base for Surface Automation.
+
+    Used so that Considerations can change their behaviour based on how the Object is laid out.
+
+    Returns:
+        str: Type of object as 'Wrapper', 'Surface Automation Base' or 'Base'
+        bool: Object type estimated. True if Object type not given in the name
+
+    """
+    if 'base' in object_name:
+        # Check if Object has a Read stage for 'Read Image'
+        read_stages = soup_object.find_all('stage', type='Read', recursive=False)
+        for read_stage in read_stages:
+            steps = read_stage.find_all('step', recursive=False)
+            for step in steps:
+                step_name = step.action.id.string
+                if step_name == 'ReadBitmap':
+                    return Settings.OBJECT_TYPES['surface automation base'], False
+        # Otherwise assume not Surface Automation
+        return Settings.OBJECT_TYPES['base'], False
+
+    elif 'wrapper' in object_name:
+        return Settings.OBJECT_TYPES['wrapper'], False
+
+    # Object name contains neither 'Base' nor 'Wrapper'
+    else:
+        application_modeller = soup_object.find('appdef', recursive=False)
+        # apptypeinfo only exists after running the App Modeller Wizard
+        if not application_modeller.apptypeinfo:
+            # Check for if the app model is inherited from another Object
+            inherits_app_model = soup_object.find('parentobject', recursive=False)
+            if inherits_app_model:
+                return Settings.OBJECT_TYPES['base'], False
+            else:
+                # Check if Object has a Read stage for 'Read Image'
+                read_stages = soup_object.find_all('stage', type='Read', recursive=False)
+                for read_stage in read_stages:
+                    steps = read_stage.find_all('step', recursive=False)
+                    for step in steps:
+                        step_name = step.action.id.string
+                        if step_name == 'ReadBitmap':
+                            return Settings.OBJECT_TYPES['surface auto base'], True
+                # Otherwise assume not Surface Automation
+                return Settings.OBJECT_TYPES['wrapper'], True
+
+        # If it an Application Model then it must be a Base
+        else:
+            return Settings.OBJECT_TYPES['base'], True
+
+
+def make_report_settings_page(metadata):
     """Add a setting report page where 'Report Considerations' are the settings to be sent to Blue Prism."""
     report_page = ReportPage()
-    report_page.set_page_type('Settings', None)
+    report_page.set_page_header_info('Settings', None)
     logging.info("Running make_report_object function for Settings")
     for setting in metadata['settings']:
         report_page.considerations.append(setting)
