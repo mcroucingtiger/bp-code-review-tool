@@ -438,6 +438,7 @@ class CheckWaitUsesDataItem(Consideration):
 class CheckWaitTimeoutToException(Consideration):
     """Checks if a Wait stage times out to an Exception or End stage.
 
+    It will allow a single Calc stage before either the Exception or the End to pass on information from the Object.
     If a Wait stage times out to an Anchor stage, it will keep following the successive anchors until it reaches
     a non-anchor stage.
     """
@@ -449,6 +450,7 @@ class CheckWaitTimeoutToException(Consideration):
         wait_end_stages = soup.find_all('stage', type='WaitEnd', recursive=False)
         exception_stages = soup.find_all('stage', type='Exception', recursive=False)
         end_stages = soup.find_all('stage', type='End', recursive=False)
+        calc_stages = soup.find_all('stage', type='Calculation', recursive=False)
 
         # Extracting the End and Exception stage id's as its faster to check the onsuccess against a python list
         # rather then searching through the full bs4 soup for a the next stage
@@ -460,19 +462,32 @@ class CheckWaitTimeoutToException(Consideration):
         for end_stage in end_stages:
             end_stage_ids.append(end_stage.get('stageid'))
 
+        calc_stage_ids = []
+        for calc_stage in calc_stages:
+            calc_stage_ids.append(calc_stage.get('stageid'))
+
         for wait_end_stage in wait_end_stages:
             onsucccess_id = wait_end_stage.onsuccess
+            previously_found_calc = False
             if onsucccess_id:
                 # This will follow Anchor stages until an end stage is found
                 while True:
-                    # Check next stage isnt an Exception stage
+                    # Check next stage isn't an Exception stage
                     if not any(exception_id in onsucccess_id.string for exception_id in exception_stage_ids):
-                        # Check next isnt an End stage
+                        # Check next isn't an End stage
                         if not any(end_id in onsucccess_id.string for end_id in end_stage_ids):
+                            # Check next is a Calc stage
+                            if any(calc_id in onsucccess_id.string for calc_id in calc_stage_ids):
+                                if not previously_found_calc:
+                                    previously_found_calc = True
+                                else:
+                                    # Second calc after found so fail
+                                    onsuccess_type = 'Calculation'
+                                    break
                             onsuccess_stage = soup.find('stage', stageid=onsucccess_id.string, recursive=False)
                             onsuccess_type = onsuccess_stage.get('type')
                             onsucccess_id = onsuccess_stage.onsuccess
-                            if onsuccess_type != 'Anchor':
+                            if onsuccess_type not in ['Anchor', 'Calculation']:
                                 break
                         else:
                             onsuccess_type = 'End'
