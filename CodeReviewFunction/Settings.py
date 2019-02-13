@@ -26,3 +26,7 @@ OBJECT_TYPES = {
     'wrapper': 'Wrapper Object'
 }
 """The classification types for Blue Prism Objects."""
+
+MIN_DETAIL_LENGTH = 10
+
+WARNING_DETAIL_LENGTH = 25

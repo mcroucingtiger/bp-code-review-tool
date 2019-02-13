@@ -540,14 +540,17 @@ class CheckNoOverlyComplexActions(Consideration):
 
             action_stages_count = len(current_action_stages)
             if action_stages_count > Settings.MAX_PAGE_STAGES:
-                error_str = "'{}' Action has more than {} stages ({})"\
-                    .format(action_name, Settings.MAX_PAGE_STAGES, action_stages_count)
+                error_str = "Action has more than {} stages ({})".format(Settings.MAX_PAGE_STAGES, action_stages_count)
                 self.errors_list.append(error_as_dict(error_str, action_name))
+
+            elif action_stages_count > Settings.WARNING_PAGE_STAGES:
+                warning_str = "Action has more than {} stages ({})" \
+                    .format(Settings.WARNING_PAGE_STAGES, action_stages_count)
+                self.warning_list.append(warning_as_dict(warning_str, action_name))
 
 
 # Topic: Exception Handling
 class CheckExceptionDetails(Consideration):
-    """Do all Exception stages have an exception detail?"""
     CONSIDERATION_NAME = "Do all Exception stages have an exception detail?"
     # Settings
     PASS_HURDLE = 0
@@ -557,7 +560,7 @@ class CheckExceptionDetails(Consideration):
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        """Find all exception stages with empty an exception detail field and store them within the self.errors list."""
+        """Find all exception stages with empty an exception detail field."""
         logging.info("'CheckExceptionDetail method called")
         exception_stages = soup.find_all('exception')
         for exception_stage in exception_stages:
@@ -570,6 +573,63 @@ class CheckExceptionDetails(Consideration):
                 self.errors_list.append(error_as_dict(exception_name, exception_page))
 
 
+class CheckExceptionAppropriateTypeDetail(Consideration):
+    CONSIDERATION_NAME = "Do Exceptions provide appropriate Type and Detail?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 1
+    INFREQUENTLY_HURDLE = 4
+    MAX_SCORE = 5  # Almost all Objects should pass this easy check
+
+    def __init__(self): super().__init__(self.MAX_SCORE)
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        """Ensure Exception details are of appropriate length and flags warnings for Business Excep in Base Objects."""
+        exception_stages = soup.find_all('exception')
+        action_subsheets = None
+
+        for exception_stage in exception_stages:
+            # Exception is not a preserve
+            if not exception_stage.get('usecurrent'):
+
+                if not Settings.OBJECT_TYPES['wrapper'] in metadata['object type']:
+                    # If Business Exception in a Base Object
+                    if 'Business' in exception_stage.get('type'):
+                        if not action_subsheets:
+                            action_subsheets = get_action_subsheets(soup)
+                        exception_name = exception_stage.parent.get('name')
+                        parent_subsheet_id = exception_stage.parent.subsheetid.string
+                        exception_page_name = subsheetid_to_action(parent_subsheet_id, action_subsheets)
+                        warning_str = "Business Exception in a Base Object: '{}'".format(exception_name)
+                        self.warning_list.append(warning_as_dict(warning_str, exception_page_name))
+
+                # If Exception detail length not adequate
+                detail_length = len(exception_stage.get('detail'))
+                # Flag an error
+                if detail_length < Settings.MIN_DETAIL_LENGTH:
+                    if not action_subsheets:
+                        action_subsheets = get_action_subsheets(soup)
+                    exception_name = exception_stage.parent.get('name')
+                    exception_detail = exception_stage.get('detail')
+                    parent_subsheet_id = exception_stage.parent.subsheetid.string
+                    exception_page_name = subsheetid_to_action(parent_subsheet_id, action_subsheets)
+                    error_str = "Exception '{}' has less than {} characters ({})\n{}" \
+                        .format(exception_name, Settings.MIN_DETAIL_LENGTH, detail_length, exception_detail)
+                    self.errors_list.append(error_as_dict(error_str, exception_page_name))
+
+                # Flag a Warning
+                elif detail_length < Settings.WARNING_DETAIL_LENGTH:
+                    if not action_subsheets:
+                        action_subsheets = get_action_subsheets(soup)
+                    exception_name = exception_stage.parent.get('name')
+                    exception_detail = exception_stage.get('detail')
+                    parent_subsheet_id = exception_stage.parent.subsheetid.string
+                    exception_page_name = subsheetid_to_action(parent_subsheet_id, action_subsheets)
+                    warning_str = "Exception '{}' has less than {} characters ({})\n{}"\
+                        .format(exception_name, Settings.WARNING_DETAIL_LENGTH, detail_length, exception_detail)
+                    self.warning_list.append(warning_as_dict(warning_str, exception_page_name))
+
+
 class CheckExceptionType(Consideration):
     CONSIDERATION_NAME = "Do Exception Types follow Best Practice?"
     # Settings
@@ -580,8 +640,7 @@ class CheckExceptionType(Consideration):
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        EXCEPTION_TYPE_WHITELIST = ['system exception', 'business exception',
-                                    'system unavailable exception', 'login system exception']
+        EXCEPTION_TYPE_WHITELIST = ['system exception', 'business exception']
         exception_stages = soup.find_all('exception')
         for exception_stage in exception_stages:
             # Ignore preserve exceptions
