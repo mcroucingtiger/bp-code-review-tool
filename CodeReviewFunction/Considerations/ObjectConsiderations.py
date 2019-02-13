@@ -82,8 +82,13 @@ class CheckActionsDocumentation(Consideration):
     """
     CONSIDERATION_NAME = "Are Action descriptions, Pre-Conditions, Post Conditions, Input params & " \
                          "Output params documented to create a meaningful BOD?"
+    #Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 3
+    INFREQUENTLY_HURDLE = 6
+    MAX_ERROR_SCORE = 5
 
-    def __init__(self): super().__init__()
+    def __init__(self): super().__init__(self.MAX_ERROR_SCORE)
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         BLACKLIST_ACTION_NAMES = ['attach', 'initialise', 'clean up', 'detach']
@@ -149,25 +154,6 @@ class CheckActionsDocumentation(Consideration):
                         else:
                             self.errors_list.append(error_as_dict(error_str, action_name))
 
-    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
-        """Calculate the consideration's score and result."""
-        self.max_score = 5
-
-        # Super call to deal with when a forced scale/result is given
-        super().evaluate_score_and_result(forced_score_scale, forced_result)
-        if not forced_score_scale and not forced_result:
-            if self.errors_list:
-                if len(self.errors_list) <= 3:
-                    self.score = self.max_score * 0.7
-                    self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 6:
-                    self.score = self.max_score * 0.3
-                    self.result = Result.INFREQUENTLY
-                else:
-                    self.score = 0
-                    self.result = Result.NO
-
-
 # Topic: Exposure
 class CheckObjectExposureValid(Consideration):
     """Check the current Object exposure is valid.
@@ -220,6 +206,10 @@ class CheckObjHasAttach(Consideration):
 
 class CheckActionsUseAttach(Consideration):
     CONSIDERATION_NAME = "Do all Actions use the Attach action?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 2
+    INFREQUENTLY_HURDLE = 3
 
     def __init__(self): super().__init__()
 
@@ -265,7 +255,8 @@ class CheckActionStartWait(Consideration):
     CONSIDERATION_NAME = "Does each action start with a Wait Stage to verify " \
                          "the application is in the correct state?"
 
-    def __init__(self): super().__init__()
+    def __init__(self):
+        super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         """Check if each Action starts with an Attach page reference followed by a Wait 'Check Exists' stage."""
@@ -342,6 +333,10 @@ class CheckGlobalTimeoutUsedWaits(Consideration):
     """
     CONSIDERATION_NAME = "Global variable enable a quick change to timeout values when application " \
                          "behaviour dictates."
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 3
+    INFREQUENTLY_HURDLE = 6
 
     def __init__(self): super().__init__()
 
@@ -371,68 +366,34 @@ class CheckGlobalTimeoutUsedWaits(Consideration):
                 error_string = "Wait stage '{}' has timeout value: {}".format(wait_stage_name, timeout, action_name)
                 self.errors_list.append(error_as_dict(error_string, action_name))
 
-    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
-        """Calculate the consideration's score and result."""
-        # Super call to deal with when a forced scale/result is given
-        super().evaluate_score_and_result(forced_score_scale, forced_result)
-        if not forced_score_scale and not forced_result:
-            # Hard fail if no global timeout data items created
-            for error_dict in self.errors_list:
-                if "No global timeout data items" in error_dict.values():
-                    self.score = 0
-                    self.result = Result.NO
-                    return
-
-            if self.errors_list:
-                if len(self.errors_list) <= 3:
-                    self.score = self.max_score * 0.7
-                    self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 6:
-                    self.score = self.max_score * 0.3
-                    self.result = Result.INFREQUENTLY
-                else:
-                    self.score = 0
-                    self.result = Result.NO
-
 
 class CheckWaitUsesDataItem(Consideration):
     CONSIDERATION_NAME = "Do Wait Stages have conditions (i.e. not arbitrary)? " \
                          "Do not include Arbitrary Waits if used for Surface Automation purposes only?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 1
+    INFREQUENTLY_HURDLE = 4
 
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        """Check that all Wait stages use a Data Item as their timeout value.
+        """Check that all Wait stages have at least one condition (no arbitrary Waits).
 
         If 'Surface Automation Used?' in the configuration settings form is TRUE, this check will be ignored.
         """
         # Don't check wait stages if Surface Automation used
         if metadata['additional info']['Surface Automation Used?'] == 'TRUE':
             return
-
+        action_subsheets = None
         wait_stages = soup.find_all('stage', type='WaitStart')
         for wait_stage in wait_stages:
-            timeout = wait_stage.timeout.string
-            if '[' not in timeout:
-                action_subsheets = get_action_subsheets(soup)
+            if len(wait_stage.choices) == 0:
+                if not action_subsheets:
+                    action_subsheets = get_action_subsheets(soup)
                 action_name = subsheetid_to_action(wait_stage.subsheetid.string, action_subsheets)
-                self.errors_list.append(error_as_dict(wait_stage.get('name'), action_name))
-
-    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
-        """Calculate the consideration's score and result."""
-        # Super call to deal with when a forced scale/result is given
-        super().evaluate_score_and_result(forced_score_scale, forced_result)
-        if not forced_score_scale and not forced_result:
-            if self.errors_list:
-                if len(self.errors_list) <= 1:
-                    self.score = self.max_score * 0.7
-                    self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 4:
-                    self.score = self.max_score * 0.3
-                    self.result = Result.INFREQUENTLY
-                else:
-                    self.score = 0
-                    self.result = Result.NO
+                error_str = "Wait stage has no condition: '{}'".format(wait_stage.get('name'))
+                self.errors_list.append(error_as_dict(error_str, action_name))
 
 
 class CheckWaitTimeoutToException(Consideration):
@@ -443,6 +404,10 @@ class CheckWaitTimeoutToException(Consideration):
     a non-anchor stage.
     """
     CONSIDERATION_NAME = "Do Wait Stages timeout to an exception?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 3
+    INFREQUENTLY_HURDLE = 7
 
     def __init__(self): super().__init__()
 
@@ -510,26 +475,14 @@ class CheckWaitTimeoutToException(Consideration):
                 error_str = "'{}' timeout has no connection".format(wait_name)
                 self.errors_list.append(error_as_dict(error_str, action_name))
 
-    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
-        """Calculate the consideration's score and result."""
-        # Super call to deal with when a forced scale/result is given
-        super().evaluate_score_and_result(forced_score_scale, forced_result)
-        if not forced_score_scale and not forced_result:
-            if self.errors_list:
-                if len(self.errors_list) <= 3:
-                    self.score = self.max_score * 0.7
-                    self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 7:
-                    self.score = self.max_score * 0.3
-                    self.result = Result.INFREQUENTLY
-                else:
-                    self.score = 0
-                    self.result = Result.NO
-
 
 # Topic: Action Size
 class CheckNoActionCalledInAction(Consideration):
     CONSIDERATION_NAME = "No Actions call other published Actions?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 1
+    INFREQUENTLY_HURDLE = 4
 
     def __init__(self): super().__init__()
 
@@ -559,25 +512,13 @@ class CheckNoActionCalledInAction(Consideration):
                             error_str = "Sleep Action '{}' called in Object".format(action_stage.get('name'))
                             self.warning_list.append(warning_as_dict(error_str, action_name))
 
-    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
-        """Calculate the consideration's score and result."""
-        # Super call to deal with when a forced scale/result is given
-        super().evaluate_score_and_result(forced_score_scale, forced_result)
-        if not forced_score_scale and not forced_result:
-            if self.errors_list:
-                if len(self.errors_list) <= 1:
-                    self.score = self.max_score * 0.7
-                    self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 4:
-                    self.score = self.max_score * 0.3
-                    self.result = Result.INFREQUENTLY
-                else:
-                    self.score = 0
-                    self.result = Result.NO
-
 
 class CheckNoOverlyComplexActions(Consideration):
     CONSIDERATION_NAME = "Checked there are no overly complex pages that could be broken up?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 3
+    INFREQUENTLY_HURDLE = 5
 
     def __init__(self): super().__init__()
 
@@ -603,27 +544,15 @@ class CheckNoOverlyComplexActions(Consideration):
                     .format(action_name, Settings.MAX_PAGE_STAGES, action_stages_count)
                 self.errors_list.append(error_as_dict(error_str, action_name))
 
-    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
-        """Calculate the consideration's score and result."""
-        # Super call to deal with when a forced scale/result is given
-        super().evaluate_score_and_result(forced_score_scale, forced_result)
-        if not forced_score_scale and not forced_result:
-            if self.errors_list:
-                if len(self.errors_list) <= 3:
-                    self.score = self.max_score * 0.7
-                    self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 5:
-                    self.score = self.max_score * 0.3
-                    self.result = Result.INFREQUENTLY
-                else:
-                    self.score = 0
-                    self.result = Result.NO
-
 
 # Topic: Exception Handling
 class CheckExceptionDetails(Consideration):
     """Do all Exception stages have an exception detail?"""
     CONSIDERATION_NAME = "Do all Exception stages have an exception detail?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 1
+    INFREQUENTLY_HURDLE = 4
 
     def __init__(self): super().__init__()
 
@@ -640,24 +569,13 @@ class CheckExceptionDetails(Consideration):
 
                 self.errors_list.append(error_as_dict(exception_name, exception_page))
 
-    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
-        # Super call to deal with when a forced scale/result is given
-        super().evaluate_score_and_result(forced_score_scale, forced_result)
-        if not forced_score_scale and not forced_result:
-            if self.errors_list:
-                if len(self.errors_list) <= 1:
-                    self.score = self.max_score * 0.7
-                    self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 4:
-                    self.score = self.max_score * 0.3
-                    self.result = Result.INFREQUENTLY
-                else:
-                    self.score = 0
-                    self.result = Result.NO
-
 
 class CheckExceptionType(Consideration):
     CONSIDERATION_NAME = "Do Exception Types follow Best Practice?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 1
+    INFREQUENTLY_HURDLE = 3
 
     def __init__(self): super().__init__()
 
@@ -686,21 +604,6 @@ class CheckExceptionType(Consideration):
                         error_str = "'{}' has Exception Type of '{}'".format(exception_name, exception_type)
                         self.errors_list.append(error_as_dict(error_str, exception_page))
 
-    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
-        # Super call to deal with when a forced scale/result is given
-        super().evaluate_score_and_result(forced_score_scale, forced_result)
-        if not forced_score_scale and not forced_result:
-            if self.errors_list:
-                if len(self.errors_list) <= 1:
-                    self.score = self.max_score * 0.7
-                    self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 3:
-                    self.score = self.max_score * 0.3
-                    self.result = Result.INFREQUENTLY
-                else:
-                    self.score = 0
-                    self.result = Result.NO
-
 
 # Topic: Logging
 class CheckLoggingAdhereToPolicy(Consideration):
@@ -710,6 +613,10 @@ class CheckLoggingAdhereToPolicy(Consideration):
     This check also ignores any stages where logging is not an option that can be turned off.
     """
     CONSIDERATION_NAME = "Does logging adhere to local Security Policy?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 3
+    INFREQUENTLY_HURDLE = 6
 
     def __init__(self): super().__init__()
 
@@ -738,22 +645,6 @@ class CheckLoggingAdhereToPolicy(Consideration):
                         error_str = "Logging Enabled: {} stage '{}'".format(stage_type, stage_name)
                         self.errors_list.append(error_as_dict(error_str, action_name))
 
-    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
-        """Calculate the consideration's score and result."""
-        # Super call to deal with when a forced scale/result is given
-        super().evaluate_score_and_result(forced_score_scale, forced_result)
-        if not forced_score_scale and not forced_result:
-            if self.errors_list:
-                if len(self.errors_list) <= 3:
-                    self.score = self.max_score * 0.7
-                    self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 6:
-                    self.score = self.max_score * 0.3
-                    self.result = Result.INFREQUENTLY
-                else:
-                    self.score = 0
-                    self.result = Result.NO
-
 
 # Topic: Images
 class CheckImageDefinitionsEfficient(Consideration):
@@ -763,6 +654,10 @@ class CheckImageDefinitionsEfficient(Consideration):
     a non-anchor stage.
     """
     CONSIDERATION_NAME = "Are Target Images definitions efficient?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 2
+    INFREQUENTLY_HURDLE = 3
 
     def __init__(self): super().__init__()
 
@@ -807,26 +702,14 @@ class CheckImageDefinitionsEfficient(Consideration):
                         .format(data_stage.get('name'), height)
                     self.errors_list.append(error_as_dict(error_str, action_name))
 
-    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
-        """Calculate the consideration's score and result."""
-        # Super call to deal with when a forced scale/result is given
-        super().evaluate_score_and_result(forced_score_scale, forced_result)
-        if not forced_score_scale and not forced_result:
-            if self.errors_list:
-                if len(self.errors_list) <= 2:
-                    self.score = self.max_score * 0.7
-                    self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 3:
-                    self.score = self.max_score * 0.3
-                    self.result = Result.INFREQUENTLY
-                else:
-                    self.score = 0
-                    self.result = Result.NO
-
 
 # Topic: Application Focus
 class CheckFocusUsedForGlobals(Consideration):
     CONSIDERATION_NAME = "Is Focus ensured when required? For using Globals and Image Recognition?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 2
+    INFREQUENTLY_HURDLE = 3
 
     def __init__(self): super().__init__()
 
@@ -899,19 +782,3 @@ class CheckFocusUsedForGlobals(Consideration):
                 action_name = subsheetid_to_action(read_with_no_activateapp, action_subsheets)
                 error_str = "Global Read stage within Action without an 'Activate Application' stage"
                 self.errors_list.append(error_as_dict(error_str, action_name))
-
-    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
-        """Calculate the consideration's score and result."""
-        # Super call to deal with when a forced scale/result is given
-        super().evaluate_score_and_result(forced_score_scale, forced_result)
-        if not forced_score_scale and not forced_result:
-            if self.errors_list:
-                if len(self.errors_list) <= 2:
-                    self.score = self.max_score * 0.7
-                    self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 3:
-                    self.score = self.max_score * 0.3
-                    self.result = Result.INFREQUENTLY
-                else:
-                    self.score = 0
-                    self.result = Result.NO

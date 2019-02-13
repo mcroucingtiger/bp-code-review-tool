@@ -7,9 +7,17 @@ class Consideration(ABC):
     """Abstract class used as the parent for all consideration classes."""
     CONSIDERATION_NAME = "Override - Title from Report"
 
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 0
+    INFREQUENTLY_HURDLE = 0
+    """Default values will fail if any errors found."""
+
+    INFREQUENTLY_SCALE = 0.3
+    FREQUENTLY_SCALE = 0.7
+
     def __init__(self, max_score=10):
         self.score = max_score
-        self.max_score = max_score
+        self.max_score = max_score  # Default for all Considerations
         self.result = Result.YES
         self.errors_list = []
         self.warning_list = []
@@ -27,21 +35,40 @@ class Consideration(ABC):
 
         If no forced values are given, the default if any error exists is a hard fail {score: 0, result: No}.
         """
-        # If no forced result is given from the Config file
-        if not forced_score_scale and not forced_result:
-            if self.errors_list:
-                self.score = 0
-                self.result = Result.NO
-            else:
-                self.score = self.max_score
-                self.result = Result.YES
-        else:
+        # Both forced results are given
+        if forced_score_scale and forced_result:
             self.score = self.max_score * forced_score_scale
             self.result = forced_result
 
-    # Doesn't need to be overridden
+        # If no forced result is given from the Config file
+        else:
+            if self.errors_list:
+                amount_errors = len(self.errors_list)
+                if amount_errors > self.INFREQUENTLY_HURDLE:
+                    self.score = 0
+                    self.result = Result.NO
+
+                elif self.FREQUENTLY_HURDLE < amount_errors <= self.INFREQUENTLY_HURDLE:
+                    self.score = self.max_score * self.INFREQUENTLY_SCALE
+                    self.result = Result.INFREQUENTLY
+
+                elif self.PASS_HURDLE < amount_errors <= self.FREQUENTLY_HURDLE:
+                    self.score = self.max_score * self.FREQUENTLY_SCALE
+                    self.result = Result.FREQUENTLY
+
+                elif amount_errors <= self.PASS_HURDLE:
+                    self.score = self.max_score
+                    self.result = Result.YES
+
+            # No Errors
+            else:
+                self.score = self.max_score
+                self.result = Result.YES
+
     def add_to_report(self, report_helper):
-        """Add the consideration and its errors' within the the report_helper's considerations list."""
+        """Add the consideration and its errors' within the the report_helper's considerations list.
+
+        This method should not need to be overridden.
+        """
         report_helper.set_consideration(self.CONSIDERATION_NAME, self.max_score, self.score, self.result,
                                         self.errors_list, self.warning_list)
-

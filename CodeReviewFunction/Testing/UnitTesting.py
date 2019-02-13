@@ -19,13 +19,14 @@ release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeRe
 release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/Test Releases/Multi-Object_Process.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/test.bprelease"
+release_path = "C:/Users/MorganCrouch/Desktop/Another Delete.xml"
 release_path_ = "C:/Users/MorganCrouch/Desktop/SDO 20190111.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/zTemplateBackupExport.bprelease"
 
 # Pickled Tests
 pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/LAMP_pickled_soups.txt"
-pickled_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/MERS_pickled_soup.txt"
 pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/MI_Premium_pickled_soups.txt"
@@ -74,7 +75,7 @@ if __name__ == '__main__':
     print('__main__ running for UnitTesting')
     full_speed_start = time.clock()
     # --- To Use Raw XML ---
-    # sub_soups = deserialize_to_soup(extract_pickled_soups(get_local_xml(release_path)))
+    #sub_soups = deserialize_to_soup(extract_pickled_soups(get_local_xml(release_path)))
     # -- To Use Pre-Pickled ---
     pickled_results = get_local_pickled_results(pickled_path)
     sub_soups = deserialize_to_soup(pickled_results)
@@ -90,7 +91,8 @@ if __name__ == '__main__':
         current_object_name = soup_object.get('name').lower()
         object_type, estimated = determine_object_type(current_object_name, soup_object)
         metadata['object type'] = object_type
-        consideration = CheckWaitTimeoutToException()
+
+        consideration = CheckWaitUsesDataItem()
         consideration.check_consideration(soup_object, metadata)
     consid_end = time.clock()
 
