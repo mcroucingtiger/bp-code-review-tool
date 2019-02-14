@@ -613,7 +613,7 @@ class CheckExceptionAppropriateTypeDetail(Consideration):
                     exception_detail = exception_stage.get('detail')
                     parent_subsheet_id = exception_stage.parent.subsheetid.string
                     exception_page_name = subsheetid_to_action(parent_subsheet_id, action_subsheets)
-                    error_str = "Exception '{}' has less than {} characters ({})\n{}" \
+                    error_str = "Exception '{}' has less than {} characters ({}) - {}" \
                         .format(exception_name, Settings.MIN_DETAIL_LENGTH, detail_length, exception_detail)
                     self.errors_list.append(error_as_dict(error_str, exception_page_name))
 
@@ -625,7 +625,7 @@ class CheckExceptionAppropriateTypeDetail(Consideration):
                     exception_detail = exception_stage.get('detail')
                     parent_subsheet_id = exception_stage.parent.subsheetid.string
                     exception_page_name = subsheetid_to_action(parent_subsheet_id, action_subsheets)
-                    warning_str = "Exception '{}' has less than {} characters ({})\n{}"\
+                    warning_str = "Exception '{}' has less than {} characters ({}) - {}"\
                         .format(exception_name, Settings.WARNING_DETAIL_LENGTH, detail_length, exception_detail)
                     self.warning_list.append(warning_as_dict(warning_str, exception_page_name))
 
@@ -662,6 +662,47 @@ class CheckExceptionType(Consideration):
                         exception_page = subsheetid_to_action(parent_subsheet_id, action_subsheets)
                         error_str = "'{}' has Exception Type of '{}'".format(exception_name, exception_type)
                         self.errors_list.append(error_as_dict(error_str, exception_page))
+
+
+class CheckObjectsNotRecoverExceptions(Consideration):
+    CONSIDERATION_NAME = "Objects do not try to recover exceptions (should be Process logic)?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 1
+    INFREQUENTLY_HURDLE = 2
+
+    def __init__(self): super().__init__()
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        ACTIONS_WHITELIST = ['attach', 'detach']
+        recover_stages = soup.find_all('stage', type='Recover', recursive=False)
+        action_subsheets = None
+        errored_subsheetids = []  # Ensure same error doesn't appear multiple times for a single Action
+
+        for recover_stage in recover_stages:
+            # Flag a warning for Recovers in wrappers
+            if metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
+                if not action_subsheets:
+                    action_subsheets = get_action_subsheets(soup)
+                action_subsheetid = recover_stage.subsheetid.string
+                if action_subsheetid not in errored_subsheetids:
+                    errored_subsheetids.append(action_subsheetid)
+                    action_name = subsheetid_to_action(recover_stage.subsheetid.string, action_subsheets)
+                    warning_str = "Exception handling (Recover stage) in a wrapper Object"
+                    self.warning_list.append(warning_as_dict(warning_str, action_name))
+
+            # Flag errors for Recovers in base Objects
+            else:
+                if not action_subsheets:
+                    action_subsheets = get_action_subsheets(soup)
+                action_subsheetid = recover_stage.subsheetid.string
+                if action_subsheetid not in errored_subsheetids:
+                    errored_subsheetids.append(action_subsheetid)
+                    action_name = subsheetid_to_action(recover_stage.subsheetid.string, action_subsheets)
+                    # Attach and Detach actions are allowed some basic exceptions handling
+                    if not any(whitelist_word in action_name.lower() for whitelist_word in ACTIONS_WHITELIST):
+                        error_str = "Exception handling (Recover stage) in base Object"
+                        self.errors_list.append(error_as_dict(error_str, action_name))
 
 
 # Topic: Logging
