@@ -36,12 +36,12 @@ class ReportPage:
         self.page_name = None
         self.actions = []
 
-    def set_page_header_info(self, page_type, soup: BeautifulSoup, object_type=None, estimated=False):
+    def set_page_header_info(self, page_type, soup: BeautifulSoup, object_type=None, evaluated=False):
         """Set the type of report page as Process/Object and gets Object's name and Actions."""
         self.page_type = page_type
 
-        if estimated:
-            self.object_type = object_type + " (Estimated)"
+        if evaluated:
+            self.object_type = object_type + " (Evaluated)"
         else:
             self.object_type = object_type
 

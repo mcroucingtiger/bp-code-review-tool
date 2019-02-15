@@ -74,6 +74,91 @@ def subsheetid_to_action(stage_subsheetid, action_subsheets)->str:
 
 
 # --- Object Considerations ---
+# Topic: Application Modeller Tree broken down
+class CheckElementsLogicallyBrokenDown(Consideration):
+    """Check App Model tree has at least two levels of descendants."""
+    CONSIDERATION_NAME = "Are the elements logically broken down by screen or each part of the screen?"
+    #Settings
+    MAX_ERROR_SCORE = 5
+
+    def __init__(self): super().__init__(self.MAX_ERROR_SCORE)
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        appdef = soup.find('appdef', recursive=False)
+        inherits_app_model = soup.find('parentobject', recursive=False)
+
+        if metadata['object type'] == Settings.OBJECT_TYPES['base']:
+            # Ensure the base Object has an application model
+            if appdef:
+                # Check the number of elements in the App Model
+                elements = appdef.find_all('element')
+                element_count = len(elements)
+                if element_count >= Settings.MAX_ELEMENT_COUNT:
+                    error_str = "Object has over {} spied elements ({}). Object size is probably too large" \
+                        .format(Settings.MAX_ELEMENT_COUNT, element_count)
+                    self.warning_list.append(error_as_dict(error_str, ''))
+                    print(error_str)
+                elif element_count >= Settings.WARNING_ELEMENT_COUNT:
+                    warning_str = "Object has over {} spied elements ({}). Check if Object is adequately granular"\
+                        .format(Settings.WARNING_ELEMENT_COUNT, element_count)
+                    self.warning_list.append(warning_as_dict(warning_str, ''))
+                    print(warning_str)
+
+                # Check the App Model tree isn't flat
+                if not inherits_app_model:
+                    root_children = appdef.element.contents
+                    # Iterates through root child element to ensure the tree has at least two descendants
+                    for root_child in root_children:
+                        if root_child.name == 'element':
+                            # root - element - element
+                            second_child_element = root_child.element
+                            if second_child_element:
+                                return
+                            # root - element - group
+                            second_child_group = root_child.group
+                            if second_child_group:
+                                return
+                        elif root_child.name == 'group':
+                            # root - group - group
+                            second_child_group = root_child.group
+                            if second_child_group:
+                                return
+                            # root - group - element
+                            second_child_element = root_child.element
+                            if second_child_element:
+                                return
+
+                    # Flat App Model found
+                    if element_count < 10:
+                        warning_str = "Flat App Model tree found, but tree contains less than {} elements ({})"\
+                            .format(Settings.WARNING_ELEMENT_MINIMUM, element_count)
+                        self.warning_list.append(warning_as_dict(warning_str, ""))
+                        print(warning_str)
+                    else:
+                        error_str = "Application Model tree has less than two child descendants (not organised by page)"
+                        self.errors_list.append(error_as_dict(error_str, ""))
+                        print(error_str)
+            else:
+                error_str = "Base Object that does not have an App Model nor inherit one."
+                self.errors_list.append(error_as_dict(error_str, ""))
+                print(error_str)
+
+        elif metadata['object type'] == Settings.OBJECT_TYPES['surface auto base']:
+            # Ensure the base Object has an application model
+            if appdef:
+                if not inherits_app_model:
+                    # Check the App Modeller contains region container elements
+                    region_container = appdef.find('region-container')
+                    if not region_container:
+                        error_str = "Surface Automation base Object doesn't have any region elements"
+                        self.errors_list.append(error_as_dict(error_str, ""))
+
+        # Object is a wrapper and so has no App Model to check (though not always the case)
+        else:
+            self.result = Result.NOT_APPLICABLE
+            self.max_score = 0
+
+
 # Topic: Documentation
 class CheckActionsDocumentation(Consideration):
     """Pre/Post conditions are only required for Base Objects.
@@ -86,9 +171,9 @@ class CheckActionsDocumentation(Consideration):
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 3
     INFREQUENTLY_HURDLE = 6
-    MAX_ERROR_SCORE = 5
+    MAX_SCORE = 5
 
-    def __init__(self): super().__init__(self.MAX_ERROR_SCORE)
+    def __init__(self): super().__init__(self.MAX_SCORE)
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         BLACKLIST_ACTION_NAMES = ['attach', 'initialise', 'clean up', 'detach']
@@ -104,7 +189,7 @@ class CheckActionsDocumentation(Consideration):
                 # Match the description stage with the Actions name and record the error
                 action_name = subsheet_info_stage.get('name')
                 if action_not_blacklisted(BLACKLIST_ACTION_NAMES, action_name):
-                    self.errors_list.append(error_as_dict("Action Description", action_name))
+                    self.errors_list.append(error_as_dict("Missing Action Description", action_name))
 
         # Find input and output param descriptions
         for start_stage in start_stages:
@@ -115,8 +200,8 @@ class CheckActionsDocumentation(Consideration):
                             param_name = input_param.get('name')
                             start_stage_id = start_stage.subsheetid.string
                             action_name = subsheetid_to_action(start_stage_id, action_subsheets)
-                            # print(param_name + ' - ' + action_name)
-                            self.errors_list.append(error_as_dict("Input param: " + param_name, action_name))
+                            error_str = "Missing input param description: {}".format(param_name)
+                            self.errors_list.append(error_as_dict(error_str, action_name))
 
         for end_stage in end_stages:
             if end_stage.outputs:
@@ -126,7 +211,8 @@ class CheckActionsDocumentation(Consideration):
                             param_name = output_param.get('name')
                             end_stage_id = end_stage.subsheetid.string
                             action_name = subsheetid_to_action(end_stage_id, action_subsheets)
-                            self.errors_list.append(error_as_dict("Output param: " + param_name, action_name))
+                            error_str = "Missing output param description: {}".format(param_name)
+                            self.errors_list.append(error_as_dict(error_str, action_name))
 
         # Find pre and post conditions
         for start_stage in start_stages:
@@ -147,12 +233,14 @@ class CheckActionsDocumentation(Consideration):
                             error_str += "No Postcondition"
 
                     if not conditions_documented:
-                        # If the Object is a Wrapper, flag a warning. If it's a Base Object, flag as an error
-                        if Settings.OBJECT_TYPES['wrapper'] in metadata['object type']:
+                        # If the Object is a Wrapper, flag a warning. If it's a Base Object, flag as an error.
+                        # Base Surface Automation Objects don't require a pre/post condition due to their nature.
+                        if metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
                             error_str += ' in Wrapper'
                             self.warning_list.append(warning_as_dict(error_str, action_name))
-                        else:
+                        elif metadata['object type'] == Settings.OBJECT_TYPES['base']:
                             self.errors_list.append(error_as_dict(error_str, action_name))
+
 
 # Topic: Exposure
 class CheckObjectExposureValid(Consideration):
@@ -164,7 +252,10 @@ class CheckObjectExposureValid(Consideration):
     """
     CONSIDERATION_NAME = "Are the Business Object exposures valid?"
 
-    def __init__(self): super().__init__()
+    # Settings
+    MAX_SCORE = 4
+
+    def __init__(self): super().__init__(self.MAX_SCORE)
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         object_run_mode = soup.get('runmode')
@@ -203,6 +294,11 @@ class CheckObjHasAttach(Consideration):
             if not attach_found:
                 self.errors_list.append(error_as_dict("Unable to find and an Attach page within the Object", "N/A"))
 
+        # Consideration not applicable to wrappers
+        else:
+            self.result = Result.NOT_APPLICABLE
+            self.max_score = 0
+
 
 class CheckActionsUseAttach(Consideration):
     CONSIDERATION_NAME = "Do all Actions use the Attach action?"
@@ -223,15 +319,20 @@ class CheckActionsUseAttach(Consideration):
         action_pages = soup.find_all('subsheet', recursive=False)
         page_reference_stages = soup.find_all('stage', type='SubSheet')
 
-        # Wrapper Actions do not require an Attach as the first stage as each contained Action will have an Attach
+        # Wrapper Actions do not require an Attach as the first stage.
+        # Check the Action does not contain a word from the blacklist and ensure the first stage is a Attach.
         if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
             for action_page in action_pages:
                 action_name = action_page.next_element.string
-                # Check the Action does not contain a word from the blacklist
                 if action_not_blacklisted(BLACKLIST_ACTION_NAMES, action_name):
-                    # Check Action starts with attach
                     if not self._action_begins_attach(action_page, start_stages, page_reference_stages):
-                        self.errors_list.append(error_as_dict("", action_name))
+                        error_str = "Action doesn't start with Attach stage"
+                        self.errors_list.append(error_as_dict(error_str, action_name))
+
+        # Consideration not applicable to wrappers
+        else:
+            self.result = Result.NOT_APPLICABLE
+            self.max_score = 0
 
     @staticmethod
     def _action_begins_attach(action_page, start_stages, page_reference_stages):
@@ -252,8 +353,12 @@ class CheckActionsUseAttach(Consideration):
 
 # Topic: Correct use of Wait Stages
 class CheckActionStartWait(Consideration):
-    CONSIDERATION_NAME = "Does each action start with a Wait Stage to verify " \
+    CONSIDERATION_NAME = "Does each Action start with a Wait Stage to verify " \
                          "the application is in the correct state?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 1
+    INFREQUENTLY_HURDLE = 4
 
     def __init__(self):
         super().__init__()
@@ -286,13 +391,12 @@ class CheckActionStartWait(Consideration):
                                             check_exists = False
                                             for choice in success_stage.choices.contents:
                                                 choice = choice.condition.id.string
-                                                if 'exists' in choice.lower():
+                                                if 'exists' in choice.lower() or 'loaded' in choice.lower():
                                                     check_exists = True
                                                     break
                                             if not check_exists:
                                                 error_str = "Wait stage following Attach, but no 'Check Exists'"
                                                 self.errors_list.append(error_as_dict(error_str, action_name))
-                                                print("**** CHECK OUT - Haven't tested ***" + error_str)
                                         else:
                                             error_str = "Wait stage following Attach has no conditions"
                                             self.errors_list.append(error_as_dict(error_str, action_name))
@@ -303,46 +407,31 @@ class CheckActionStartWait(Consideration):
                                     error_str = 'Action doesnt start with Attach'
                                     self.errors_list.append(error_as_dict(error_str, action_name))
 
-    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
-        """Calculate the consideration's score and result."""
-        # Super call to deal with when a forced scale/result is given
-        super().evaluate_score_and_result(forced_score_scale, forced_result)
-        if not forced_score_scale and not forced_result:
-            # Hard fail if no global timeout data items created
-            for error_dict in self.errors_list:
-                if "No global timeout data items" in error_dict.values():
-                    self.score = 0
-                    self.result = Result.NO
-                    return
-
-            if self.errors_list:
-                if len(self.errors_list) <= 1:
-                    self.score = self.max_score * 0.7
-                    self.result = Result.FREQUENTLY
-                elif 2 <= len(self.errors_list) <= 4:
-                    self.score = self.max_score * 0.3
-                    self.result = Result.INFREQUENTLY
-                else:
-                    self.score = 0
-                    self.result = Result.NO
+        # Consideration not applicable to wrappers
+        else:
+            self.result = Result.NOT_APPLICABLE
+            self.max_score = 0
 
 
 class CheckGlobalTimeoutUsedWaits(Consideration):
     """Checks that Global timeout data items exist on the Initialise page and ensure that they are used for
     all Wait stages within the Object.
+
+    Scoring is based on amount of errors, and as it can't distinguish between the error of having no global data items
+    vs not using global data items in a couple Wait stages, any error will result in a hrad fail.
     """
     CONSIDERATION_NAME = "Global variable enable a quick change to timeout values when application " \
                          "behaviour dictates."
-    # Settings
-    PASS_HURDLE = 0
-    FREQUENTLY_HURDLE = 3
-    INFREQUENTLY_HURDLE = 6
+    MAX_SCORE = 5
 
-    def __init__(self): super().__init__()
+    def __init__(self): super().__init__(self.MAX_SCORE)
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         # Don't check wait stages if Surface Automation used
+        # TODO: Need a better implementation of this. Makes this completely redundant for surface automation
         if metadata['additional info']['Surface Automation Used?'] == 'TRUE':
+            self.result = Result.NOT_APPLICABLE
+            self.max_score = 0
             return
 
         data_stages = soup.find_all('stage', type='Data')
@@ -354,7 +443,7 @@ class CheckGlobalTimeoutUsedWaits(Consideration):
                 init_data_items.append(data_stage.get('name'))
 
         if not init_data_items:
-            self.errors_list.append(error_as_dict("No global timeout data items", "Initialise"))
+            self.errors_list.append(error_as_dict("No global timeout Data items", "Initialise"))
             return
 
         for wait_stage in wait_stages:
@@ -367,7 +456,7 @@ class CheckGlobalTimeoutUsedWaits(Consideration):
                 self.errors_list.append(error_as_dict(error_string, action_name))
 
 
-class CheckWaitUsesDataItem(Consideration):
+class CheckWaitNotArbitrary(Consideration):
     CONSIDERATION_NAME = "Do Wait Stages have conditions (i.e. not arbitrary)? " \
                          "Do not include Arbitrary Waits if used for Surface Automation purposes only?"
     # Settings
@@ -384,16 +473,31 @@ class CheckWaitUsesDataItem(Consideration):
         """
         # Don't check wait stages if Surface Automation used
         if metadata['additional info']['Surface Automation Used?'] == 'TRUE':
+            self.max_score = 0
+            self.result = Result.NOT_APPLICABLE
             return
-        action_subsheets = None
-        wait_stages = soup.find_all('stage', type='WaitStart')
-        for wait_stage in wait_stages:
-            if len(wait_stage.choices) == 0:
-                if not action_subsheets:
-                    action_subsheets = get_action_subsheets(soup)
-                action_name = subsheetid_to_action(wait_stage.subsheetid.string, action_subsheets)
-                error_str = "Wait stage has no condition: '{}'".format(wait_stage.get('name'))
-                self.errors_list.append(error_as_dict(error_str, action_name))
+
+        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+            action_subsheets = None
+            wait_stages = soup.find_all('stage', type='WaitStart')
+            if wait_stages:
+                for wait_stage in wait_stages:
+                    if len(wait_stage.choices) == 0:
+                        if not action_subsheets:
+                            action_subsheets = get_action_subsheets(soup)
+                        action_name = subsheetid_to_action(wait_stage.subsheetid.string, action_subsheets)
+                        error_str = "Wait stage has no condition: '{}'".format(wait_stage.get('name'))
+                        self.errors_list.append(error_as_dict(error_str, action_name))
+
+            # Consideration not applicable if no wait stages
+            else:
+                self.max_score = 0
+                self.result = Result.NOT_APPLICABLE
+
+        # Consideration not applicable to wrappers
+        else:
+            self.max_score = 0
+            self.result = Result.NOT_APPLICABLE
 
 
 class CheckWaitTimeoutToException(Consideration):
@@ -412,68 +516,74 @@ class CheckWaitTimeoutToException(Consideration):
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        wait_end_stages = soup.find_all('stage', type='WaitEnd', recursive=False)
-        exception_stages = soup.find_all('stage', type='Exception', recursive=False)
-        end_stages = soup.find_all('stage', type='End', recursive=False)
-        calc_stages = soup.find_all('stage', type='Calculation', recursive=False)
+        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+            wait_end_stages = soup.find_all('stage', type='WaitEnd', recursive=False)
+            exception_stages = soup.find_all('stage', type='Exception', recursive=False)
+            end_stages = soup.find_all('stage', type='End', recursive=False)
+            calc_stages = soup.find_all('stage', type='Calculation', recursive=False)
 
-        # Extracting the End and Exception stage id's as its faster to check the onsuccess against a python list
-        # rather then searching through the full bs4 soup for a the next stage
-        exception_stage_ids = []
-        for exception_stage in exception_stages:
-            exception_stage_ids.append(exception_stage.get('stageid'))
+            # Extracting the End and Exception stage id's as its faster to check the onsuccess against a python list
+            # rather then searching through the full bs4 soup for a the next stage
+            exception_stage_ids = []
+            for exception_stage in exception_stages:
+                exception_stage_ids.append(exception_stage.get('stageid'))
 
-        end_stage_ids = []
-        for end_stage in end_stages:
-            end_stage_ids.append(end_stage.get('stageid'))
+            end_stage_ids = []
+            for end_stage in end_stages:
+                end_stage_ids.append(end_stage.get('stageid'))
 
-        calc_stage_ids = []
-        for calc_stage in calc_stages:
-            calc_stage_ids.append(calc_stage.get('stageid'))
+            calc_stage_ids = []
+            for calc_stage in calc_stages:
+                calc_stage_ids.append(calc_stage.get('stageid'))
 
-        for wait_end_stage in wait_end_stages:
-            onsucccess_id = wait_end_stage.onsuccess
-            previously_found_calc = False
-            if onsucccess_id:
-                # This will follow Anchor stages until an end stage is found
-                while True:
-                    # Check next stage isn't an Exception stage
-                    if not any(exception_id in onsucccess_id.string for exception_id in exception_stage_ids):
-                        # Check next isn't an End stage
-                        if not any(end_id in onsucccess_id.string for end_id in end_stage_ids):
-                            # Check next is a Calc stage
-                            if any(calc_id in onsucccess_id.string for calc_id in calc_stage_ids):
-                                if not previously_found_calc:
-                                    previously_found_calc = True
-                                else:
-                                    # Second calc after found so fail
-                                    onsuccess_type = 'Calculation'
+            for wait_end_stage in wait_end_stages:
+                onsucccess_id = wait_end_stage.onsuccess
+                previously_found_calc = False
+                if onsucccess_id:
+                    # This will follow Anchor stages until an end stage is found
+                    while True:
+                        # Check next stage isn't an Exception stage
+                        if not any(exception_id in onsucccess_id.string for exception_id in exception_stage_ids):
+                            # Check next isn't an End stage
+                            if not any(end_id in onsucccess_id.string for end_id in end_stage_ids):
+                                # Check next is a Calc stage
+                                if any(calc_id in onsucccess_id.string for calc_id in calc_stage_ids):
+                                    if not previously_found_calc:
+                                        previously_found_calc = True
+                                    else:
+                                        # Second calc after found so fail
+                                        onsuccess_type = 'Calculation'
+                                        break
+                                onsuccess_stage = soup.find('stage', stageid=onsucccess_id.string, recursive=False)
+                                onsuccess_type = onsuccess_stage.get('type')
+                                onsucccess_id = onsuccess_stage.onsuccess
+                                if onsuccess_type not in ['Anchor', 'Calculation']:
                                     break
-                            onsuccess_stage = soup.find('stage', stageid=onsucccess_id.string, recursive=False)
-                            onsuccess_type = onsuccess_stage.get('type')
-                            onsucccess_id = onsuccess_stage.onsuccess
-                            if onsuccess_type not in ['Anchor', 'Calculation']:
+                            else:
+                                onsuccess_type = 'End'
                                 break
                         else:
-                            onsuccess_type = 'End'
+                            onsuccess_type = 'Exception'
                             break
-                    else:
-                        onsuccess_type = 'Exception'
-                        break
 
-                if not (onsuccess_type == 'End' or onsuccess_type == 'Exception'):
+                    if not (onsuccess_type == 'End' or onsuccess_type == 'Exception'):
+                        wait_name = wait_end_stage.get('name')
+                        action_subsheets = get_action_subsheets(soup)
+                        action_name = subsheetid_to_action(wait_end_stage.subsheetid.string, action_subsheets)
+                        error_str = "'{}' timed out to a {} stage".format(wait_name, onsuccess_type)
+                        self.errors_list.append(error_as_dict(error_str, action_name))
+
+                else:
                     wait_name = wait_end_stage.get('name')
                     action_subsheets = get_action_subsheets(soup)
                     action_name = subsheetid_to_action(wait_end_stage.subsheetid.string, action_subsheets)
-                    error_str = "'{}' timed out to a {} stage".format(wait_name, onsuccess_type)
+                    error_str = "'{}' timeout has no connection".format(wait_name)
                     self.errors_list.append(error_as_dict(error_str, action_name))
 
-            else:
-                wait_name = wait_end_stage.get('name')
-                action_subsheets = get_action_subsheets(soup)
-                action_name = subsheetid_to_action(wait_end_stage.subsheetid.string, action_subsheets)
-                error_str = "'{}' timeout has no connection".format(wait_name)
-                self.errors_list.append(error_as_dict(error_str, action_name))
+        # Consideration not applicable to wrappers
+        else:
+            self.max_score = 0
+            self.result = Result.NOT_APPLICABLE
 
 
 # Topic: Action Size
@@ -494,6 +604,12 @@ class CheckNoActionCalledInAction(Consideration):
         """
         action_subsheets = get_action_subsheets(soup)
         action_stages = soup.find_all('stage', type='Action', recursive=False)
+
+        # Consideration not applicable to wrappers
+        if ['object type'] == Settings.OBJECT_TYPES['wrapper']:
+            self.max_score = 0
+            self.result = Result.NOT_APPLICABLE
+
         if action_stages:
             # Goes through all found Action stages and gets their subsheetid location
             for action_stage in action_stages:
@@ -506,8 +622,10 @@ class CheckNoActionCalledInAction(Consideration):
                     if metadata['object type'] == Settings.OBJECT_TYPES['base']:
                         self.errors_list.append(error_as_dict(error_str, action_name))
                     else:
-                        # If its a Wrapper or Surface Automation Base, ignore the Sleep Actions
-                        # and flag other Actions as Warnings
+                        # If its a Wrapper or Surface Automation Base, consideration is not applicable
+                        # and flag any Sleep actions as warnings
+                        self.result = Result.NOT_APPLICABLE
+                        self.max_score = 0
                         if action_stage.resource.get('action') == 'Sleep':
                             error_str = "Sleep Action '{}' called in Object".format(action_stage.get('name'))
                             self.warning_list.append(warning_as_dict(error_str, action_name))
@@ -517,13 +635,13 @@ class CheckNoOverlyComplexActions(Consideration):
     CONSIDERATION_NAME = "Checked there are no overly complex pages that could be broken up?"
     # Settings
     PASS_HURDLE = 0
-    FREQUENTLY_HURDLE = 3
-    INFREQUENTLY_HURDLE = 5
+    FREQUENTLY_HURDLE = 2
+    INFREQUENTLY_HURDLE = 4
 
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        """Go through all stages in an Object and check that none are Action stages."""
+        """Check that amount of stages per page does not exceed the limits."""
         IGNORE_TYPES = ['SubSheetInfo', 'ProcessInfo', 'Note', 'Data', 'Collection', 'Block',
                         'Anchor', 'WaitEnd', 'Start']
 
@@ -539,13 +657,14 @@ class CheckNoOverlyComplexActions(Consideration):
                         current_action_stages.append(stage)
 
             action_stages_count = len(current_action_stages)
-            if action_stages_count > Settings.MAX_PAGE_STAGES:
-                error_str = "Action has more than {} stages ({})".format(Settings.MAX_PAGE_STAGES, action_stages_count)
+            if action_stages_count > Settings.MAX_STAGES_PER_PAGE:
+                error_str = "Action has more than {} stages ({})"\
+                    .format(Settings.MAX_STAGES_PER_PAGE, action_stages_count)
                 self.errors_list.append(error_as_dict(error_str, action_name))
 
-            elif action_stages_count > Settings.WARNING_PAGE_STAGES:
+            elif action_stages_count > Settings.WARNING_STAGES_PER_PAGE:
                 warning_str = "Action has more than {} stages ({})" \
-                    .format(Settings.WARNING_PAGE_STAGES, action_stages_count)
+                    .format(Settings.WARNING_STAGES_PER_PAGE, action_stages_count)
                 self.warning_list.append(warning_as_dict(warning_str, action_name))
 
 
@@ -591,17 +710,16 @@ class CheckExceptionAppropriateTypeDetail(Consideration):
         for exception_stage in exception_stages:
             # Exception is not a preserve
             if not exception_stage.get('usecurrent'):
-
-                if not Settings.OBJECT_TYPES['wrapper'] in metadata['object type']:
-                    # If Business Exception in a Base Object
+                if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+                    # If Business Exception in a Base Object, mark as an error
                     if 'Business' in exception_stage.get('type'):
                         if not action_subsheets:
                             action_subsheets = get_action_subsheets(soup)
                         exception_name = exception_stage.parent.get('name')
                         parent_subsheet_id = exception_stage.parent.subsheetid.string
                         exception_page_name = subsheetid_to_action(parent_subsheet_id, action_subsheets)
-                        warning_str = "Business Exception in a Base Object: '{}'".format(exception_name)
-                        self.warning_list.append(warning_as_dict(warning_str, exception_page_name))
+                        error_str = "Business Exception in a Base Object: '{}'".format(exception_name)
+                        self.errors_list.append(error_as_dict(error_str, exception_page_name))
 
                 # If Exception detail length not adequate
                 detail_length = len(exception_stage.get('detail'))
@@ -640,6 +758,7 @@ class CheckExceptionType(Consideration):
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
+        """Check Exception type is either System or Business exception."""
         EXCEPTION_TYPE_WHITELIST = ['system exception', 'business exception']
         exception_stages = soup.find_all('exception')
         for exception_stage in exception_stages:
@@ -699,10 +818,15 @@ class CheckObjectsNotRecoverExceptions(Consideration):
                 if action_subsheetid not in errored_subsheetids:
                     errored_subsheetids.append(action_subsheetid)
                     action_name = subsheetid_to_action(recover_stage.subsheetid.string, action_subsheets)
-                    # Attach and Detach actions are allowed some basic exceptions handling
+                    # Attach and Detach actions are allowed to have some basic exceptions handling
                     if not any(whitelist_word in action_name.lower() for whitelist_word in ACTIONS_WHITELIST):
                         error_str = "Exception handling (Recover stage) in base Object"
                         self.errors_list.append(error_as_dict(error_str, action_name))
+
+        if metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
+            # Consideration scoring not applicable to wrappers
+            self.max_score = 0
+            self.result = Result.NOT_APPLICABLE
 
 
 # Topic: Logging
@@ -745,6 +869,11 @@ class CheckLoggingAdhereToPolicy(Consideration):
                         error_str = "Logging Enabled: {} stage '{}'".format(stage_type, stage_name)
                         self.errors_list.append(error_as_dict(error_str, action_name))
 
+        # Consideration not applicable when in Dev or Testing
+        else:
+            self.max_score = 0
+            self.result = Result.NOT_APPLICABLE
+
 
 # Topic: Images
 class CheckImageDefinitionsEfficient(Consideration):
@@ -763,44 +892,52 @@ class CheckImageDefinitionsEfficient(Consideration):
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         data_stages = soup.find_all('stage', type='Data', recursive=False)
+        action_subsheets = None
+        image_found = False
         for data_stage in data_stages:
             if data_stage.datatype.string == 'image':
                 image_str = data_stage.initialvalue.string
+                if image_str:
+                    image_found = True
+                    commas_found = 0
+                    width = ''
+                    height = ''
+                    # initialvalue string in form widthNum,heightNum,restOfString
+                    for pos, char in enumerate(image_str):
+                        if commas_found == 0:
+                            if not char == ",":
+                                width += char
+                            else:
+                                commas_found += 1
+                        elif commas_found == 1:
+                            if not char == ",":
+                                height += char
+                            else:
+                                break
 
-                commas_found = 0
-                width = ''
-                height = ''
-                # initialvalue string in form widthNum,heightNum,restOfString
-                for pos, char in enumerate(image_str):
-                    if commas_found == 0:
-                        if not char == ",":
-                            width += char
-                        else:
-                            commas_found += 1
-                    elif commas_found == 1:
-                        if not char == ",":
-                            height += char
-                        else:
-                            break
-
-                if int(width) > Settings.MAX_WIDTH:
-                    action_subsheets = get_action_subsheets(soup)
-                    action_name = subsheetid_to_action(data_stage.subsheetid.string, action_subsheets)
-                    if int(height) > Settings.MAX_HEIGHT:
-                        error_str = "Data Item '{}' has Height: {} and Width: {}" \
-                            .format(data_stage.get('name'), height, width)
+                    # Flag error for image being too big
+                    if int(width) > Settings.MAX_IMAGE_WIDTH or int(height) > Settings.MAX_IMAGE_HEIGHT:
+                        if not action_subsheets:
+                            action_subsheets = get_action_subsheets(soup)
+                        action_name = subsheetid_to_action(data_stage.subsheetid.string, action_subsheets)
+                        error_str = "Data Item '{}' larger than recommended {} x {} ({} x {})"\
+                            .format(data_stage.get('name'), Settings.MAX_IMAGE_WIDTH, Settings.MAX_IMAGE_HEIGHT,
+                                    height, width)
                         self.errors_list.append(error_as_dict(error_str, action_name))
-                    else:
-                        error_str = "Data Item '{}' has Width: {}" \
-                            .format(data_stage.get('name'), width)
-                        self.errors_list.append(error_as_dict(error_str, action_name))
 
-                elif int(height) > Settings.MAX_HEIGHT:
-                    action_subsheets = get_action_subsheets(soup)
-                    action_name = subsheetid_to_action(data_stage.subsheetid.string, action_subsheets)
-                    error_str = "Data Item '{}' has Height: {}" \
-                        .format(data_stage.get('name'), height)
-                    self.errors_list.append(error_as_dict(error_str, action_name))
+                    # Flag warning for image being too big
+                    if int(width) > Settings.WARNING_IMAGE_WIDTH or int(height) > Settings.WARNING_IMAGE_HEIGHT:
+                        if not action_subsheets:
+                            action_subsheets = get_action_subsheets(soup)
+                        action_name = subsheetid_to_action(data_stage.subsheetid.string, action_subsheets)
+                        warning_str = "Data Item '{}' size above warning threshold {} x {} ({} x {})" \
+                            .format(data_stage.get('name'), Settings.WARNING_IMAGE_WIDTH, Settings.WARNING_IMAGE_HEIGHT,
+                                    height, width)
+                        self.errors_list.append(error_as_dict(warning_str, action_name))
+
+        if not image_found:
+            self.max_score = 0
+            self.result = Result.NOT_APPLICABLE
 
 
 # Topic: Application Focus
@@ -818,6 +955,7 @@ class CheckFocusUsedForGlobals(Consideration):
         global_read_subsheetids = []
         activate_app_subsheetids = []
         aafocus_subsheetids = []
+        global_stage_found = False
 
         navigate_stages = soup.find_all('stage', type='Navigate', recursive=False)
         read_stages = soup.find_all('stage', type='Read', recursive=False)
@@ -834,6 +972,7 @@ class CheckFocusUsedForGlobals(Consideration):
                     activate_app_subsheetids.append(subsheetid)
 
                 elif any(global_nav in step_name for global_nav in Settings.GLOBAL_NAV_STEPS):
+                    global_stage_found = True
                     subsheetid = step.parent.subsheetid.string
                     global_nav_subsheetids.append(subsheetid)
 
@@ -847,6 +986,7 @@ class CheckFocusUsedForGlobals(Consideration):
             for step in steps:
                 step_name = step.action.id.string
                 if any(global_read in step_name for global_read in Settings.GLOBAL_READ_STEPS):
+                    global_stage_found = True
                     subsheetid = step.parent.subsheetid.string
                     global_read_subsheetids.append(subsheetid)
 
@@ -882,3 +1022,7 @@ class CheckFocusUsedForGlobals(Consideration):
                 action_name = subsheetid_to_action(read_with_no_activateapp, action_subsheets)
                 error_str = "Global Read stage within Action without an 'Activate Application' stage"
                 self.errors_list.append(error_as_dict(error_str, action_name))
+
+        if not global_stage_found:
+            self.result = Result.NOT_APPLICABLE
+            self.max_score = 0

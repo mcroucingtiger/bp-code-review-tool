@@ -62,16 +62,17 @@ def test_with_local():
     report_pages = []
     print("Getting release off desktop")
 
-    # Raw Releases
+    # Releases with Header
     release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                     "/Testing/SAM Processed XML/LAMP.xml"
     release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                     "/Testing/SAM Processed XML/MERS.xml"
     release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                     "/Testing/SAM Processed XML/MI Report.xml"
-    # With header information
     release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                    "/Testing/SAM Processed XML/Multi-Process.xml"
+    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                   "/Testing/SAM Processed XML/SDO Surface Auto.xml"
 
     xml_string = get_local_xml(release_path)
 
@@ -231,9 +232,9 @@ def make_report_object(soup_object, active_object_consideration_classes, metadat
     report_page = ReportPage()
 
     current_object_name = soup_object.get('name').lower()
-    object_type, estimated = SoupUtilities.determine_object_type(current_object_name, soup_object)
+    object_type, evaluated = SoupUtilities.determine_object_type(current_object_name, soup_object)
     metadata['object type'] = object_type
-    report_page.set_page_header_info('Object', soup_object, object_type, estimated)
+    report_page.set_page_header_info('Object', soup_object, object_type, evaluated)
 
     logging.info("Running make_report_object function for " + report_page.page_name)
 

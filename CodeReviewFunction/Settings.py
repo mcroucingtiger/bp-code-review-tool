@@ -1,14 +1,20 @@
 # Object Settings
-WARNING_PAGE_STAGES = 15
+WARNING_STAGES_PER_PAGE = 15
 """Warning point for number of stages that an Action page should have."""
 
-MAX_PAGE_STAGES = 25
+MAX_STAGES_PER_PAGE = 25
 """Maximum number of stages that an Action page should have."""
 
-MAX_WIDTH = 400
+WARNING_IMAGE_WIDTH = 180
+"""Warning pixel width of images stored in Data items."""
+
+WARNING_IMAGE_HEIGHT = 180
+"""Warning pixel height of images stored in Data items."""
+
+MAX_IMAGE_WIDTH = 250
 """Maximum pixel width of images stored in Data items."""
 
-MAX_HEIGHT = 400
+MAX_IMAGE_HEIGHT = 250
 """Maximum pixel height of images stored in Data items."""
 
 GLOBAL_NAV_STEPS = ['UIAMouseClick', 'UIAClickCentre', 'UIASendKeys',
@@ -28,5 +34,20 @@ OBJECT_TYPES = {
 """The classification types for Blue Prism Objects."""
 
 MIN_DETAIL_LENGTH = 10
+"""Minimum length for an Exception detail."""
 
 WARNING_DETAIL_LENGTH = 25
+"""Warning length for an Exception detail."""
+
+MAX_ELEMENT_COUNT = 250
+"""Maximum number of spied elements an App Model can contain."""
+
+WARNING_ELEMENT_COUNT = 130
+"""Warning number of spied elements an App Model can contain."""
+
+WARNING_ELEMENT_MINIMUM = 10
+"""Warning if a flat App Model is found but there are less than this many elements."""
+ACTIONS_PER_PAGE_WRAPPER_RATIO = 3
+"Ratio of how many Action stages to a sub-sheet (i.e. per Action page) to suggest that the Object is a wrapper. "
+
+

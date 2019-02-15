@@ -35,35 +35,41 @@ class Consideration(ABC):
 
         If no forced values are given, the default if any error exists is a hard fail {score: 0, result: No}.
         """
-        # Both forced results are given
+        # Both forced results are given from config
         if forced_score_scale and forced_result:
             self.score = self.max_score * forced_score_scale
             self.result = forced_result
 
         # If no forced result is given from the Config file
+        # and no forced result is given from the Consideration not being applicable to the Object
         else:
-            if self.errors_list:
-                amount_errors = len(self.errors_list)
-                if amount_errors > self.INFREQUENTLY_HURDLE:
-                    self.score = 0
-                    self.result = Result.NO
+            if not self.result == Result.NOT_APPLICABLE:
+                if self.errors_list:
+                    amount_errors = len(self.errors_list)
+                    if amount_errors > self.INFREQUENTLY_HURDLE:
+                        self.score = 0
+                        self.result = Result.NO
 
-                elif self.FREQUENTLY_HURDLE < amount_errors <= self.INFREQUENTLY_HURDLE:
-                    self.score = self.max_score * self.INFREQUENTLY_SCALE
-                    self.result = Result.INFREQUENTLY
+                    elif self.FREQUENTLY_HURDLE < amount_errors <= self.INFREQUENTLY_HURDLE:
+                        self.score = self.max_score * self.INFREQUENTLY_SCALE
+                        self.result = Result.INFREQUENTLY
 
-                elif self.PASS_HURDLE < amount_errors <= self.FREQUENTLY_HURDLE:
-                    self.score = self.max_score * self.FREQUENTLY_SCALE
-                    self.result = Result.FREQUENTLY
+                    elif self.PASS_HURDLE < amount_errors <= self.FREQUENTLY_HURDLE:
+                        self.score = self.max_score * self.FREQUENTLY_SCALE
+                        self.result = Result.FREQUENTLY
 
-                elif amount_errors <= self.PASS_HURDLE:
+                    elif amount_errors <= self.PASS_HURDLE:
+                        self.score = self.max_score
+                        self.result = Result.YES
+
+                # No Errors
+                else:
                     self.score = self.max_score
                     self.result = Result.YES
 
-            # No Errors
+            # Consideration is not applicable for scoring
             else:
                 self.score = self.max_score
-                self.result = Result.YES
 
     def add_to_report(self, report_helper):
         """Add the consideration and its errors' within the the report_helper's considerations list.
