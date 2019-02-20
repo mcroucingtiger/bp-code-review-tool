@@ -49,5 +49,6 @@ WARNING_ELEMENT_MINIMUM = 10
 """Warning if a flat App Model is found but there are less than this many elements."""
 ACTIONS_PER_PAGE_WRAPPER_RATIO = 3
 "Ratio of how many Action stages to a sub-sheet (i.e. per Action page) to suggest that the Object is a wrapper. "
+WARNING_ELEMENT_TYPE_LENGTH = 16
 
 

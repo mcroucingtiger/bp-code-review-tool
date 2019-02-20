@@ -10,7 +10,7 @@ from ..Considerations.ProcessConsiderations import *
 
 
 # Main
-release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                "/Testing/SAM Processed XML/LAMP.xml"
 release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/SAM Processed XML/MERS.xml"
@@ -19,17 +19,21 @@ release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeRe
 release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/SAM Processed XML/Multi-Process.xml"
 # Additional
-release_path_ = "C:/Users/MorganCrouch/Desktop/Bunnings Cloud Storage.bprelease"
+release_path_ = "C:/Users/MorganCrouch/Desktop/Bunnings Cloud Storage.bprelease"  # Really shitty object
 release_path_ = "C:/Users/MorganCrouch/Desktop/SDO 20190111.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/zTemplateBackupExport.bprelease"
-release_path_ = "C:/Users/MorganCrouch/Desktop/Orora Backup 20180328.bprelease"
+release_path = "C:/Users/MorganCrouch/Desktop/Orora Backup 20180328.bprelease"
+release_path_ = "C:/Users/MorganCrouch/Desktop/BTS-IBMSynergyBillingDataUpdate-Release-V2.1.bprelease"
+
+
+
 # Dummy
 release_path_ = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/test.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/Another Delete.xml"
 
 # Pickled Tests
-pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+pickled_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/LAMP_pickled_soups.txt"
 pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/MERS_pickled_soup.txt"
@@ -37,7 +41,7 @@ pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeRe
                 "/Testing/Fixtures/MI_Premium_pickled_soups.txt"
 pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/multi_process_pickled_soups.txt"
-pickled_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/SDO_pickled_soups.txt"
 
 
@@ -89,18 +93,15 @@ if __name__ == '__main__':
 
     print_sub_soups_contents(sub_soups)
 
-
     consid_start = time.clock()
     for soup_object in sub_soups.objects:
         metadata = {}
         object_name = soup_object.get('name')
-        print('\n=== Current Object: ' + object_name + " ===")
-        current_object_name = soup_object.get('name').lower()
-        object_type, estimated = SoupUtilities.determine_object_type(current_object_name, soup_object)
+        object_type, estimated = SoupUtilities.determine_object_type(object_name.lower(), soup_object)
         metadata['object type'] = object_type
-        print(object_type)
+        print('\n=== Current Object: {} ({}) ==='.format(object_name, object_type))
 
-        consideration = CheckElementsLogicallyBrokenDown()
+        consideration = CheckElementNamesFollowBestPractice()
         consideration.check_consideration(soup_object, metadata)
     consid_end = time.clock()
 

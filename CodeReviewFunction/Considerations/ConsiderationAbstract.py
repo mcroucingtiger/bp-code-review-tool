@@ -19,6 +19,7 @@ class Consideration(ABC):
         self.score = max_score
         self.max_score = max_score  # Default for all Considerations
         self.result = Result.YES
+        self.result_forced = False
         self.errors_list = []
         self.warning_list = []
 
@@ -41,9 +42,9 @@ class Consideration(ABC):
             self.result = forced_result
 
         # If no forced result is given from the Config file
-        # and no forced result is given from the Consideration not being applicable to the Object
+        # and no forced result is given from within the Consideration check
         else:
-            if not self.result == Result.NOT_APPLICABLE:
+            if not self.result_forced:
                 if self.errors_list:
                     amount_errors = len(self.errors_list)
                     if amount_errors > self.INFREQUENTLY_HURDLE:
@@ -67,9 +68,6 @@ class Consideration(ABC):
                     self.score = self.max_score
                     self.result = Result.YES
 
-            # Consideration is not applicable for scoring
-            else:
-                self.score = self.max_score
 
     def add_to_report(self, report_helper):
         """Add the consideration and its errors' within the the report_helper's considerations list.
@@ -78,3 +76,11 @@ class Consideration(ABC):
         """
         report_helper.set_consideration(self.CONSIDERATION_NAME, self.max_score, self.score, self.result,
                                         self.errors_list, self.warning_list)
+
+    def _force_result(self, result, score, max_score=None):
+        """Set the result of the consideration and override scoring of errors."""
+        self.result_forced = True
+        self.result = result
+        self.score = score
+        if max_score:
+            self.max_score = max_score

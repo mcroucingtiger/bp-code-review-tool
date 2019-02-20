@@ -39,7 +39,7 @@ def object_not_blacklisted(blacklist, object_soup) -> bool:
 
 
 def action_not_blacklisted(blacklist, action_name)->bool:
-    """Check action name doesn't constain blacklisted words."""
+    """Check action name doesn't contain blacklisted words."""
     action_name = action_name.lower()
     if not any(blacklist_word in action_name for blacklist_word in blacklist):
         return True
@@ -155,8 +155,197 @@ class CheckElementsLogicallyBrokenDown(Consideration):
 
         # Object is a wrapper and so has no App Model to check (though not always the case)
         else:
-            self.result = Result.NOT_APPLICABLE
-            self.max_score = 0
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+
+
+# Topic: Element - Names
+class CheckElementNamesFollowBestPractice(Consideration):
+    # TODO: Ensure the metadata from checklist contains a check to flip the order name/type. This is used
+    #  in the method params of _check_element_title
+
+    CONSIDERATION_NAME = "Do the element names follow BP best practice or local naming convention?"
+
+    APPLICATION_TYPES = ['HTML', 'Java', 'Win32', 'Browser', 'Mainframe']
+    ELEMENT_TYPE_WHITELIST = ['box', 'button', 'label', 'field', 'link', 'text', 'tab', 'main', 'title', 'window',
+                              'region', 'list', 'popup', 'input', 'header', 'section', 'table', 'element',
+                              'edit', 'toolbar']
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 3
+    INFREQUENTLY_HURDLE = 5
+
+    def __init__(self): super().__init__()
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        """Check that best practice was used when naming the App Modeller tree elements."""
+        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+            appdef = soup.find('appdef', recursive=False)
+            inherits_app_model = soup.find('parentobject', recursive=False)
+            elements = appdef.find_all('element')
+
+            if appdef:  # Ensure the base Object has an application model
+                if not inherits_app_model:
+                    application_type = appdef.apptypeinfo.id.string.replace('Launch', '').replace('Attach', '')
+                    if application_type not in self.APPLICATION_TYPES:
+                        error_str = "Unknown application type"
+                        self.errors_list.append(error_as_dict(error_str, application_type))
+                        self._force_result(Result.NO, 0)  # Can't evaluate if don't recognise application type
+
+                    root_element_found = False
+                    for element in elements:
+                        if not root_element_found:
+                            element_basetype = element.find('basetype', recursive=False).string
+                            if element_basetype == 'Application':
+                                root_element_found = True
+                            if root_element_found:  # Skip the root element
+                                continue
+                        self._check_element_title(element, application_type)
+
+                    # Checks specific to Surface Automation Base Objects
+                    if metadata['object type'] == Settings.OBJECT_TYPES['surface auto base']:
+                        regions = appdef.find_all('region')
+                        for region in regions:
+                            region_name = region.get('name')
+                            if self._element_is_dynamic(region):
+                                if 'dynamic' not in region_name.lower():
+                                    warning_str = "Region has a dynamic attribute. " \
+                                                  "Please include 'Dynamic' in the element name"
+                                    self.warning_list.append(warning_as_dict(warning_str, region_name))
+
+                # Object doesn't have it's own App Model to search (inherits)
+                else:
+                    self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            else:
+                error_str = "Base Object that does not have an App Model nor does it inherit one."
+                self.errors_list.append(error_as_dict(error_str, ""))
+
+        else:
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+
+    def _check_element_title(self, element: Tag, application_type: str, element_type_start=True):
+        """Check the element name conforms to best practice and add a warning/error if it does not.
+
+        Best practice is to have the element type, hyphen, element name and then if necessary (dynamic) if it uses any
+        dynamic attributes and the spy mode if it is not the elements native spy mode in brackets on the end
+        e.g. 'Field - Username (Dynamic) (Win32)'
+
+         Args:
+             element: The element tag to be checked.
+             application_type: How the App Modeller has been set to recognise the application (Win32, Java, Browser)
+             element_type_start: Local naming convention order for which side of the hyphen type/name goes.
+                False for "element_name - element_type"
+
+        Returns:
+            bool: If the element conforms to best practice.  True for success, False otherwise.
+
+         """
+
+        WIN32_ELEMENT_TYPES = ['window', 'radio button', 'check box', 'button', 'edit', 'list box', 'combo box',
+                               'tree view', 'tab control', 'track bar', 'up-down box', 'datetime picker',
+                               'month calendar picker', 'scroll bar', 'label', 'toolbar', '.net datagrid',
+                               '.net datagridview']
+
+        element_name = element.get('name')
+        element_base_type = element.find('basetype', recursive=False).string
+        type_idx, name_idx = 0, 1
+
+        if not element_type_start:
+            type_idx, name_idx = 1, 0
+
+        # Check correct use of hyphen for formatting
+        element_list = element_name.split(' - ')
+        if not self._correct_hyphen_formatting(element_name, element_list):
+            return False
+
+        # Check the element type within the name matches the whitelist
+        if any(element_type in element_list[type_idx].lower() for element_type in self.ELEMENT_TYPE_WHITELIST):
+            if len(element_list[type_idx]) >= Settings.WARNING_ELEMENT_TYPE_LENGTH:
+                warning_str = "Element type may be excessively long".format()
+                self.warning_list.append(warning_as_dict(warning_str, element_list[type_idx]))
+        # If element type isn't valid, flag error and strip spy mode from element type if needed
+        else:
+            if not element_type_start:
+                left_bracket_idx = str.rfind(element_list[1], '(')
+                if left_bracket_idx != -1:
+                    element_list[1] = element_list[1][0:left_bracket_idx]
+            error_str = "'{}' not in the element type whitelist".format(element_list[type_idx])
+            self.errors_list.append(error_as_dict(error_str, element_name))
+            return False
+
+        # Check the element type is correctly labeled, if it isn't the native app spying mode
+        if application_type not in element_base_type:
+            # If application is Win32, SAP spy mode doesn't need to be mentioned in brackets
+            if 'SAP' in element_base_type and application_type == 'Win32':
+                pass
+            # Element was spied with a mode different to the native app mode
+            else:
+                left_bracket_idx = str.rfind(element_list[1], '(')  # reverse find used to find the final ()
+                right_bracket_idx = str.rfind(element_list[1], ')')
+
+                # Converts Windows elements with base_type 'Button' or 'Edit' to instead be 'Win32' for consistency
+                if element_base_type.lower() in WIN32_ELEMENT_TYPES:
+                    element_base_type = 'Win32'
+
+                # Check if the correct spy mode was noted in the brackets e.g. (AA)
+                if left_bracket_idx != -1 and right_bracket_idx != -1:
+                    given_spy_type = element_list[1][left_bracket_idx + 1:right_bracket_idx]
+                    if given_spy_type.lower() != 'dynamic':
+                        if given_spy_type not in element_base_type:
+                            warning_str = "Stated spying mode '{}' is not the element's spy mode: '{}'" \
+                                .format(given_spy_type, element_base_type)
+                            self.warning_list.append(warning_as_dict(warning_str, element_name))
+
+                    # Brackets contain 'dynamic' but Spy mode not in the brackets when it should be
+                    else:
+                        if application_type not in element_base_type:
+                            warning_str = "Object's application type is '{}' but element's base type is '{}'. " \
+                                          "Please note the spy mode within brackets at the end of the element's name" \
+                                .format(application_type, element_base_type)
+                            self.warning_list.append(warning_as_dict(warning_str, element_name))
+
+                # Otherwise Spy mode not in the brackets when it should be
+                else:
+                    if application_type not in element_base_type:
+                        warning_str = "Object's application type is '{}' but element's base type is '{}'. " \
+                                      "Please note the spy mode within brackets at the end of the element's name"\
+                            .format(application_type, element_base_type)
+                        self.warning_list.append(warning_as_dict(warning_str, element_name))
+
+        if self._element_is_dynamic(element):
+            if 'dynamic' not in element_name.lower():
+                warning_str = "Element has a dynamic attribute. Please include 'Dynamic' in the element name"
+                self.warning_list.append(warning_as_dict(warning_str, element_name))
+
+        return True
+
+    def _correct_hyphen_formatting(self, element_name, element_list):
+        """Ensure the element name contains a single hyphen for formatting purposes."""
+        if len(element_list) >= 3:
+            error_str = "Element name contains multiple hyphen. Use the native tree structure" \
+                        " to order the app model"
+            self.errors_list.append(error_as_dict(error_str, element_name))
+            return False
+        elif len(element_list) == 1:
+            if '-' in element_name:
+                error_str = "Element name contains a hyphen, but it is not properly used for formatting. " \
+                            "Ensure there is a space on each side of the hyphen."
+                self.errors_list.append(error_as_dict(error_str, element_name))
+                False
+            else:
+                error_str = "Element name does not contain a hyphen to split the name for correct formatting"
+                self.errors_list.append(error_as_dict(error_str, element_name))
+                return False
+
+        elif len(element_list) == 2:
+            return True
+
+    @staticmethod
+    def _element_is_dynamic(element: Tag):
+        attributes = element.attributes
+        if attributes.find('attribute', comparisontype='dynamic', recursive=False) is not None:
+            return True
+        else:
+            return False
 
 
 # Topic: Documentation
@@ -167,7 +356,7 @@ class CheckActionsDocumentation(Consideration):
     """
     CONSIDERATION_NAME = "Are Action descriptions, Pre-Conditions, Post Conditions, Input params & " \
                          "Output params documented to create a meaningful BOD?"
-    #Settings
+    # Settings
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 3
     INFREQUENTLY_HURDLE = 6
@@ -296,8 +485,7 @@ class CheckObjHasAttach(Consideration):
 
         # Consideration not applicable to wrappers
         else:
-            self.result = Result.NOT_APPLICABLE
-            self.max_score = 0
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
 
 class CheckActionsUseAttach(Consideration):
@@ -331,8 +519,7 @@ class CheckActionsUseAttach(Consideration):
 
         # Consideration not applicable to wrappers
         else:
-            self.result = Result.NOT_APPLICABLE
-            self.max_score = 0
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
     @staticmethod
     def _action_begins_attach(action_page, start_stages, page_reference_stages):
@@ -409,8 +596,7 @@ class CheckActionStartWait(Consideration):
 
         # Consideration not applicable to wrappers
         else:
-            self.result = Result.NOT_APPLICABLE
-            self.max_score = 0
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
 
 class CheckGlobalTimeoutUsedWaits(Consideration):
@@ -422,6 +608,11 @@ class CheckGlobalTimeoutUsedWaits(Consideration):
     """
     CONSIDERATION_NAME = "Global variable enable a quick change to timeout values when application " \
                          "behaviour dictates."
+
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 1
+    INFREQUENTLY_HURDLE = 4
     MAX_SCORE = 5
 
     def __init__(self): super().__init__(self.MAX_SCORE)
@@ -430,8 +621,7 @@ class CheckGlobalTimeoutUsedWaits(Consideration):
         # Don't check wait stages if Surface Automation used
         # TODO: Need a better implementation of this. Makes this completely redundant for surface automation
         if metadata['additional info']['Surface Automation Used?'] == 'TRUE':
-            self.result = Result.NOT_APPLICABLE
-            self.max_score = 0
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
             return
 
         data_stages = soup.find_all('stage', type='Data')
@@ -444,6 +634,7 @@ class CheckGlobalTimeoutUsedWaits(Consideration):
 
         if not init_data_items:
             self.errors_list.append(error_as_dict("No global timeout Data items", "Initialise"))
+            self._force_result(Result.NO, 0)
             return
 
         for wait_stage in wait_stages:
@@ -473,13 +664,12 @@ class CheckWaitNotArbitrary(Consideration):
         """
         # Don't check wait stages if Surface Automation used
         if metadata['additional info']['Surface Automation Used?'] == 'TRUE':
-            self.max_score = 0
-            self.result = Result.NOT_APPLICABLE
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
             return
 
         if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
             action_subsheets = None
-            wait_stages = soup.find_all('stage', type='WaitStart')
+            wait_stages = soup.find_all('stage', type='WaitStart', recursive=False)
             if wait_stages:
                 for wait_stage in wait_stages:
                     if len(wait_stage.choices) == 0:
@@ -491,13 +681,103 @@ class CheckWaitNotArbitrary(Consideration):
 
             # Consideration not applicable if no wait stages
             else:
-                self.max_score = 0
-                self.result = Result.NOT_APPLICABLE
+                self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
         # Consideration not applicable to wrappers
         else:
-            self.max_score = 0
-            self.result = Result.NOT_APPLICABLE
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+
+
+class CheckNavigateFollowedByWait(Consideration):
+    CONSIDERATION_NAME = "Are navigation stages between application screens followed by a Wait stage to verify success?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 3
+    INFREQUENTLY_HURDLE = 6
+
+    ACTION_BLACKLIST = ['attach', 'detach', 'terminate', 'close']
+    ELEMENT_BASETYPE_WHITELIST = ['HTMLCombo', 'HTMLRadioButton']  # TODO: This is just HTML, need to do other modes
+
+    def __init__(self): super().__init__()
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        """Check all navigate stages to ensure they are followed by a Wait or End stage.
+
+        If the Navigate uses a 'Pause between each step' value, this will be accepted as a wait. This check will also
+        try to determine if the navigate is selecting an item on the screen (e.g. a check box) that does not require a
+        Wait after. This feature may be unnecessary.
+
+        This check is only applicable to normal base Objects.
+        """
+        if metadata['object type'] == Settings.OBJECT_TYPES['base']:
+            action_subsheets = None
+            navigate_stages = soup.find_all('stage', type='Navigate', recursive=False)
+
+            if navigate_stages:
+                if not action_subsheets:
+                    action_subsheets = get_action_subsheets(soup)
+                for navigate_stage in navigate_stages:
+                    if navigate_stage.onsuccess is not None:
+                        action_name = subsheetid_to_action(navigate_stage.subsheetid.string, action_subsheets)
+                        if action_not_blacklisted(self.ACTION_BLACKLIST, action_name):
+                            current_stage = navigate_stage
+                            # Keep going through success stages while they are Anchors
+                            while True:
+                                success_stage = soup.find('stage', stageid=current_stage.onsuccess.string,
+                                                          recursive=False)
+                                success_type = success_stage.get('type')
+                                if not success_type == 'Anchor':
+                                    break
+                                else:
+                                    current_stage = success_stage
+
+                            # Check if the next stage isn't a Wait or an End
+                            if success_type != 'WaitStart' and success_type != 'End':
+                                # Accept a 'Pause after each step' as a Wait
+                                if navigate_stage.get('interval') is None:
+                                    self._check_element_is_selectable(navigate_stage, action_name, soup)
+                    else:
+                        action_name = subsheetid_to_action(navigate_stage.subsheetid.string, action_subsheets)
+                        error_str = "Navigate stage isn't connected to another stage"
+                        self.errors_list.append(error_as_dict(error_str, action_name))
+            # Consideration not applicable if no navigate stages
+            else:
+                self._force_result(Result.NOT_APPLICABLE, 0, 0)
+        # Consideration not applicable to wrappers or Surface Auto bases
+        else:
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+
+    def _check_element_is_selectable(self, navigate_stage, action_name, soup):
+        """Check each step in a Navigate stage to see if any application elements are selectable."""
+        navigate_steps = navigate_stage.find_all('step', recursive=False)
+        error_str, warning_str = '', ''
+
+        for navigate_step in navigate_steps:
+            # Find the element being used by the Navigate so that it can be determined if  combo box is being selected
+            element_id = navigate_step.element.get('id')
+            if element_id:
+                element = soup.find('id', text=element_id)
+                if element:  # element wont be found if App Model is inherited
+                    element_datatype = element.parent.datatype.string
+                    element_basetype = element.parent.basetype
+                    # Navigate is changing value of flag, so is acceptable without Wait
+                    if element_datatype == 'flag':
+                        return
+                    elif any(basetype in element_basetype for basetype in self.ELEMENT_BASETYPE_WHITELIST):
+                        # print("PASS basetype: '{}', datatype '{}'".format(element_basetype, element_datatype))
+                        return
+                    else:
+                        # print("FAIL basetype: '{}', datatype '{}'".format(element_basetype, element_datatype))
+                        error_str = "Navigate stage not followed by a Wait stage: '{}'" \
+                            .format(navigate_stage.get('name'))
+                else:
+                    warning_str = "Navigate '{}' not followed by a Wait or End, but App Model is inherited " \
+                                  "so can't determine if a Wait is necessary".format(navigate_stage.get('name'))
+                    self.warning_list.append(warning_as_dict(warning_str, action_name))
+                    return
+
+        # If no stages in the Navigate are selecting a combo box, Navigate added to error list
+        self.errors_list.append(error_as_dict(error_str, action_name))
 
 
 class CheckWaitTimeoutToException(Consideration):
@@ -582,8 +862,98 @@ class CheckWaitTimeoutToException(Consideration):
 
         # Consideration not applicable to wrappers
         else:
-            self.max_score = 0
-            self.result = Result.NOT_APPLICABLE
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+
+# Topic: Re-useable Actions
+class CheckObjectsNoBusinessLogic(Consideration):
+    CONSIDERATION_NAME = "Is there no Business Logic that should be in a Process?"
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 3
+    INFREQUENTLY_HURDLE = 7
+
+    def __init__(self): super().__init__()
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        NotImplemented  # TODO: delete this once xave has replie to the email
+        decision_stages = soup.find_all('stage', type='Decision', recursive=False)
+        choice_stages = soup.find_all('stage', type='ChoiceStart', recursive=False)
+        action_subsheets = None
+        NUMERICAL_COMPARISONS = ['<', '<=', '>', '>=']
+
+
+        # Ensure there are no choice or decision stages in base Objects, except for Attach and Detach Actions
+        if metadata['object type'] == Settings.OBJECT_TYPES['base']:
+            if choice_stages:
+                for choice_stage in choice_stages:
+                    if not action_subsheets:
+                        action_subsheets = get_action_subsheets(soup)
+                    subsheetid = choice_stage.subsheetid.string
+                    action_name = subsheetid_to_action(subsheetid, action_subsheets)
+                    stage_name = choice_stage.get('name')
+                    error_str = "Choice stage '{}' on '{}' in a base Object".format(stage_name, action_name)  # TODO: remove action name from this string once done testing
+                    self.errors_list.append(error_as_dict(error_str, action_name))
+                    print(error_str)
+
+            if decision_stages:
+                for decision_stage in decision_stages:
+                    if not action_subsheets:
+                        action_subsheets = get_action_subsheets(soup)
+                    subsheetid = decision_stage.subsheetid.string
+                    action_name = subsheetid_to_action(subsheetid, action_subsheets)
+                    if 'attach' not in action_name.lower() and 'detach' not in action_name.lower():
+                        stage_name = decision_stage.get('name')
+                        error_str = "Decision stage '{}' on '{}' in a base Object".format(stage_name, action_name)  # TODO: remove action name from this string once done testing
+                        self.errors_list.append(error_as_dict(error_str, action_name))
+                        print(error_str)
+
+        # For wrapper objects, ensure that any decision/choice stages are numerical comparisons or checking flags
+        # Otherwise, may indicate business logic
+        elif metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
+
+            if choice_stages:
+                if not action_subsheets:
+                    action_subsheets = get_action_subsheets(soup)
+                for choice_stage in choice_stages:
+                    choices = choice_stage.choices
+                    for choice in choices:
+                        expression = choice.get('expression')
+                        # Numerical comparisons are acceptable
+                        if not any(comparison in expression for comparison in NUMERICAL_COMPARISONS):
+                            error_str = "Choice stage '{}' on '{}' has decision not based on a flag Data item in a wrapper."
+                            if self._expression_uses_flag(expression, choice_stage, error_str, action_subsheets):
+                                break
+
+            if decision_stages:
+                if not action_subsheets:
+                    action_subsheets = get_action_subsheets(soup)
+                for decision_stage in decision_stages:
+                    decision_name = decision_stage.get('name').lower()
+                    if 'retry' not in decision_name:  # TODO: people have variation on retry such as 'Max retries' or 'Loop counter'
+                        expression = decision_stage.decision.get('expression')
+                        error_str = "Decision stage '{}' on '{}' has decision not based on a flag Data item in a wrapper."
+                        self._expression_uses_flag(expression, decision_stage, error_str, action_subsheets)
+
+        elif metadata['object type'] == Settings.OBJECT_TYPES['surface auto base']:
+            pass
+            NotImplemented
+
+    def _expression_uses_flag(self, expression, stage, error_str, action_subsheets):
+        """Check decision's expression is based on a flag data item.
+
+        Decisions based on flags can be of the form 'flag_data_item = True' or 'flag_data_item'.
+        """
+        if 'True' not in expression and 'False' not in expression:
+            if '=' in expression or '<>' in expression:
+                subsheetid = stage.subsheetid.string
+                action_name = subsheetid_to_action(subsheetid, action_subsheets)
+                if 'attach' not in action_name.lower() or 'detach' not in action_name.lower():
+                    stage_name = stage.get('name')
+                    error_str = error_str.format(stage_name, action_name)  # TODO: remove action name from this string
+                    self.errors_list.append(error_as_dict(error_str, action_name))
+                    print(error_str)
+                    return True
+        return False
 
 
 # Topic: Action Size
@@ -607,8 +977,7 @@ class CheckNoActionCalledInAction(Consideration):
 
         # Consideration not applicable to wrappers
         if ['object type'] == Settings.OBJECT_TYPES['wrapper']:
-            self.max_score = 0
-            self.result = Result.NOT_APPLICABLE
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
         if action_stages:
             # Goes through all found Action stages and gets their subsheetid location
@@ -624,8 +993,7 @@ class CheckNoActionCalledInAction(Consideration):
                     else:
                         # If its a Wrapper or Surface Automation Base, consideration is not applicable
                         # and flag any Sleep actions as warnings
-                        self.result = Result.NOT_APPLICABLE
-                        self.max_score = 0
+                        self._force_result(Result.NOT_APPLICABLE, 0, 0)
                         if action_stage.resource.get('action') == 'Sleep':
                             error_str = "Sleep Action '{}' called in Object".format(action_stage.get('name'))
                             self.warning_list.append(warning_as_dict(error_str, action_name))
@@ -825,8 +1193,7 @@ class CheckObjectsNotRecoverExceptions(Consideration):
 
         if metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
             # Consideration scoring not applicable to wrappers
-            self.max_score = 0
-            self.result = Result.NOT_APPLICABLE
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
 
 # Topic: Logging
@@ -871,8 +1238,7 @@ class CheckLoggingAdhereToPolicy(Consideration):
 
         # Consideration not applicable when in Dev or Testing
         else:
-            self.max_score = 0
-            self.result = Result.NOT_APPLICABLE
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
 
 # Topic: Images
@@ -936,8 +1302,7 @@ class CheckImageDefinitionsEfficient(Consideration):
                         self.errors_list.append(error_as_dict(warning_str, action_name))
 
         if not image_found:
-            self.max_score = 0
-            self.result = Result.NOT_APPLICABLE
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
 
 # Topic: Application Focus
@@ -1024,5 +1389,4 @@ class CheckFocusUsedForGlobals(Consideration):
                 self.errors_list.append(error_as_dict(error_str, action_name))
 
         if not global_stage_found:
-            self.result = Result.NOT_APPLICABLE
-            self.max_score = 0
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
