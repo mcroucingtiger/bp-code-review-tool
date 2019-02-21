@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup, Tag
 import logging
 import inspect
 import sys
+import re
 from ..ReportPage import error_as_dict, warning_as_dict, Result
 from .ConsiderationAbstract import Consideration
 from .. import Settings
@@ -864,25 +865,27 @@ class CheckWaitTimeoutToException(Consideration):
         else:
             self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
+
 # Topic: Re-useable Actions
 class CheckObjectsNoBusinessLogic(Consideration):
     CONSIDERATION_NAME = "Is there no Business Logic that should be in a Process?"
     # Settings
     PASS_HURDLE = 0
-    FREQUENTLY_HURDLE = 3
+    FREQUENTLY_HURDLE = 4
     INFREQUENTLY_HURDLE = 7
+    # TODO: Wait for response from Xave about checking Base objects
 
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        NotImplemented  # TODO: delete this once xave has replie to the email
         decision_stages = soup.find_all('stage', type='Decision', recursive=False)
         choice_stages = soup.find_all('stage', type='ChoiceStart', recursive=False)
         action_subsheets = None
-        NUMERICAL_COMPARISONS = ['<', '<=', '>', '>=']
+        LOOP_COUNTER_WHITELIST = ['retry', 'retries', 'loop', 'count']
+        BASE_ACTION_DECISION_WHITELIST = ['attach', 'detach', 'launch', 'terminate']
 
-
-        # Ensure there are no choice or decision stages in base Objects, except for Attach and Detach Actions
+        # Ensure there are no choice or decision stages in base Objects,
+        # except for Attach and Detach Actions
         if metadata['object type'] == Settings.OBJECT_TYPES['base']:
             if choice_stages:
                 for choice_stage in choice_stages:
@@ -891,9 +894,10 @@ class CheckObjectsNoBusinessLogic(Consideration):
                     subsheetid = choice_stage.subsheetid.string
                     action_name = subsheetid_to_action(subsheetid, action_subsheets)
                     stage_name = choice_stage.get('name')
-                    error_str = "Choice stage '{}' on '{}' in a base Object".format(stage_name, action_name)  # TODO: remove action name from this string once done testing
+                    error_str = "Choice stage '{}' in a base Object".format(stage_name)
                     self.errors_list.append(error_as_dict(error_str, action_name))
                     print(error_str)
+                    print(action_name)
 
             if decision_stages:
                 for decision_stage in decision_stages:
@@ -901,27 +905,40 @@ class CheckObjectsNoBusinessLogic(Consideration):
                         action_subsheets = get_action_subsheets(soup)
                     subsheetid = decision_stage.subsheetid.string
                     action_name = subsheetid_to_action(subsheetid, action_subsheets)
-                    if 'attach' not in action_name.lower() and 'detach' not in action_name.lower():
+                    if not any(whitelist_action in action_name.lower()
+                               for whitelist_action in BASE_ACTION_DECISION_WHITELIST):
                         stage_name = decision_stage.get('name')
-                        error_str = "Decision stage '{}' on '{}' in a base Object".format(stage_name, action_name)  # TODO: remove action name from this string once done testing
+                        expression = decision_stage.decision.get('expression')
+                        error_str = "Decision stage '{}' in a base Object\nExpression: '{}'"\
+                            .format(stage_name, expression)
                         self.errors_list.append(error_as_dict(error_str, action_name))
                         print(error_str)
+                        print(action_name)
 
-        # For wrapper objects, ensure that any decision/choice stages are numerical comparisons or checking flags
+        # For wrapper Objects and Surface Automation Base Objects
+        # ensure that any decision/choice stages are numerical comparisons or checking flags
         # Otherwise, may indicate business logic
-        elif metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
-
+        elif metadata['object type'] != Settings.OBJECT_TYPES['base']:
             if choice_stages:
                 if not action_subsheets:
                     action_subsheets = get_action_subsheets(soup)
                 for choice_stage in choice_stages:
                     choices = choice_stage.choices
+                    # Checks all the choices in Multi-Choice stage to see if all of them use flags.
                     for choice in choices:
                         expression = choice.get('expression')
-                        # Numerical comparisons are acceptable
-                        if not any(comparison in expression for comparison in NUMERICAL_COMPARISONS):
-                            error_str = "Choice stage '{}' on '{}' has decision not based on a flag Data item in a wrapper."
-                            if self._expression_uses_flag(expression, choice_stage, error_str, action_subsheets):
+                        stage_name = choice_stage.get('name')
+                        subsheetid = choice_stage.subsheetid.string
+                        action_name = subsheetid_to_action(subsheetid, action_subsheets)
+                        if not self._expression_uses_flag(expression):
+                            if not self.expression_compares_with_flag(expression, soup):
+                                warning_str = "\nChoice stage '{}' has decision not based on a flag Data item. " \
+                                              "This could suggest Process logic in a Business Object." \
+                                              "\nExpression '{}"\
+                                    .format(stage_name, expression)
+                                self.warning_list.append(warning_as_dict(warning_str, action_name))
+                                print(warning_str)
+                                print(action_name)  # TODO: Get rid of the \n in the name
                                 break
 
             if decision_stages:
@@ -929,31 +946,103 @@ class CheckObjectsNoBusinessLogic(Consideration):
                     action_subsheets = get_action_subsheets(soup)
                 for decision_stage in decision_stages:
                     decision_name = decision_stage.get('name').lower()
-                    if 'retry' not in decision_name:  # TODO: people have variation on retry such as 'Max retries' or 'Loop counter'
+                    # Decision name doesn't demonstrate that it is a loop
+                    if not any(loop_string in decision_name for loop_string in LOOP_COUNTER_WHITELIST):
                         expression = decision_stage.decision.get('expression')
-                        error_str = "Decision stage '{}' on '{}' has decision not based on a flag Data item in a wrapper."
-                        self._expression_uses_flag(expression, decision_stage, error_str, action_subsheets)
+                        stage_name = decision_stage.get('name')
+                        subsheetid = decision_stage.subsheetid.string
+                        action_name = subsheetid_to_action(subsheetid, action_subsheets)
+                        if not self._expression_uses_flag(expression):
+                            if not self.expression_compares_with_flag(expression, soup):
+                                warning_str = "\nDecision could potentially indicate Business logic " \
+                                              "appropriate for the Process level. \nDecision name: '{}' \nExpression: '{}'"\
+                                    .format(stage_name, expression)
+                                self.warning_list.append(warning_as_dict(warning_str, action_name))
+                                print(warning_str)
+                                print("Action name: " + action_name)
 
-        elif metadata['object type'] == Settings.OBJECT_TYPES['surface auto base']:
-            pass
-            NotImplemented
-
-    def _expression_uses_flag(self, expression, stage, error_str, action_subsheets):
+    @staticmethod
+    def _expression_uses_flag(expression):
         """Check decision's expression is based on a flag data item.
 
-        Decisions based on flags can be of the form 'flag_data_item = True' or 'flag_data_item'.
+        Decisions to check flags can be of the form 'flag_data_item = True' or 'flag_data_item'.
+        Checks for 'foo = True' or '[foo]' as flag expressions.
+
+        Args:
+            expression (str): The decision's expression.
+
+        Returns:
+            bool: True for success, False otherwise.
+
         """
-        if 'True' not in expression and 'False' not in expression:
-            if '=' in expression or '<>' in expression:
-                subsheetid = stage.subsheetid.string
-                action_name = subsheetid_to_action(subsheetid, action_subsheets)
-                if 'attach' not in action_name.lower() or 'detach' not in action_name.lower():
-                    stage_name = stage.get('name')
-                    error_str = error_str.format(stage_name, action_name)  # TODO: remove action name from this string
-                    self.errors_list.append(error_as_dict(error_str, action_name))
-                    print(error_str)
+        COMPARISON_SIGNS = ['=', '<>', '>', '>=', '<', '<=']
+        # Checks for 'foo = True', if not then checks for '[foo]'
+        if 'True' in expression or 'False' in expression:
+            return True
+        elif any(comparison in expression for comparison in COMPARISON_SIGNS):
+            return False
+        else:
+            return True
+
+    @staticmethod
+    def expression_compares_with_flag(expression, soup: BeautifulSoup):
+        """Check if the expression is a comparison of two Data items of type Flag."""
+        # Removes all text within the brackets
+        removed_dataitems = re.sub('\[.*?\]', '[]', expression).replace(' ', '')
+        if removed_dataitems == '[]=[]' or removed_dataitems == '[]<>[]':
+            # Extract last Data item in expression to check if its a flag
+            data_item_name = expression[expression.rfind("[") + 1:expression.rfind("]")]
+            data_item = soup.find('stage', {'name': data_item_name}, type='Data', recursive=False)
+            if data_item:
+                if data_item.datatype.string == 'flag':
                     return True
         return False
+
+    def evaluate_score_and_result(self, forced_score_scale=None, forced_result=None):
+        """Calculate or set the consideration's score and result.
+
+        Overridden so that it counts the number or warnings instead of errors.
+        If no forced values are given, the default if any error exists is a hard fail {score: 0, result: No}.
+        """
+        # Both forced results are given from config
+        if forced_score_scale and forced_result:
+            self.score = self.max_score * forced_score_scale
+            self.result = forced_result
+
+        # If no forced result is given from the Config file
+        # and no forced result is given from within the Consideration check
+        else:
+            if not self.result_forced:
+                if self.warning_list or self.errors_list:
+                    # Calculate score on which ever list is larger,
+                    # but don't calculate on warnings if less than 3 warnings
+                    errors_amount = len(self.errors_list)
+                    warnings_amount = len(self.warning_list)
+                    if errors_amount >= warnings_amount or warnings_amount <= 3:
+                        issues_amount = errors_amount
+                    else:
+                        issues_amount = warnings_amount
+
+                    if issues_amount > self.INFREQUENTLY_HURDLE:
+                        self.score = 0
+                        self.result = Result.NO
+
+                    elif self.FREQUENTLY_HURDLE < issues_amount <= self.INFREQUENTLY_HURDLE:
+                        self.score = self.max_score * self.INFREQUENTLY_SCALE
+                        self.result = Result.INFREQUENTLY
+
+                    elif self.PASS_HURDLE < issues_amount <= self.FREQUENTLY_HURDLE:
+                        self.score = self.max_score * self.FREQUENTLY_SCALE
+                        self.result = Result.FREQUENTLY
+
+                    elif issues_amount <= self.PASS_HURDLE:
+                        self.score = self.max_score
+                        self.result = Result.YES
+
+                # No Warnings
+                else:
+                    self.score = self.max_score
+                    self.result = Result.YES
 
 
 # Topic: Action Size
@@ -1212,8 +1301,13 @@ class CheckLoggingAdhereToPolicy(Consideration):
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        IGNORE_TYPES = ['SubSheetInfo', 'ProcessInfo', 'Note', 'Data', 'Collection', 'Block', 'Anchor']
+        NO_LOGGING_TYPES = ['SubSheetInfo', 'ProcessInfo', 'Note', 'Data', 'Collection', 'Block', 'Anchor']
+
+        all_disabled = True
+        all_errors = True
+        exception_stage_types = []
         if metadata['additional info']['Delivery Stage'] == 'Production':
+
             action_subsheets = get_action_subsheets(soup)
             all_stages = soup.find_all('stage', recursive=False)
 
@@ -1221,7 +1315,7 @@ class CheckLoggingAdhereToPolicy(Consideration):
                 stage_name = stage.get('name')
                 stage_type = stage.get('type')
 
-                if stage_type not in IGNORE_TYPES:
+                if stage_type not in NO_LOGGING_TYPES:
                     if stage.loginhibit:
                         if stage.loginhibit.get('onsuccess'):
                             # Ready for if SAM business rules are updated

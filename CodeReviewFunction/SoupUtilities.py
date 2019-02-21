@@ -87,29 +87,14 @@ def determine_object_type(object_name, soup_object: BeautifulSoup):
     # Object name contains neither 'Base' nor 'Wrapper'
     else:
         application_modeller = soup_object.find('appdef', recursive=False)
+        # Object has an App Model
         # apptypeinfo only exists after running the App Modeller Wizard
-        if not application_modeller.apptypeinfo:
-            # Check for if the app model is inherited from another Object
-            inherits_app_model = soup_object.find('parentobject', recursive=False)
-            if inherits_app_model:
-                return Settings.OBJECT_TYPES['base'], False
+        if application_modeller.apptypeinfo:
 
-            # Check if Object has a Read stage for 'Read Image'
-            else:
-                read_stages = soup_object.find_all('stage', type='Read', recursive=False)
-                for read_stage in read_stages:
-                    steps = read_stage.find_all('step', recursive=False)
-                    if steps:
-                        for step in steps:
-                            step_name = step.action.id.string
-                            if step_name == 'ReadBitmap':
-                                return Settings.OBJECT_TYPES['surface auto base'], True
-                # Otherwise assume not Surface Automation
-                else:
-                    return Settings.OBJECT_TYPES['wrapper'], True
+            # Check if the App Model only has empty elements
+            if application_modeller.element.find('element') is None:
+                return Settings.OBJECT_TYPES['wrapper'], True
 
-        # If it an Application Model then it must be a Base
-        else:
             # Find all the Action stages and all subsheets (Action pages) in an Object.
             # Checks to see if there are more Actions per page than the cut off ratio, suggesting it's a wrapper.
             subsheets = soup_object.find_all('subsheet', recursive=False)
@@ -118,3 +103,26 @@ def determine_object_type(object_name, soup_object: BeautifulSoup):
                 return Settings.OBJECT_TYPES['wrapper'], True
             else:
                 return Settings.OBJECT_TYPES['base'], True
+
+        # No Application Model exists indicating wrapper
+        else:
+            # Check for if the app model is inherited from another Object
+            inherits_app_model = soup_object.find('parentobject', recursive=False)
+            if inherits_app_model:
+                return Settings.OBJECT_TYPES['base'], False
+
+            # App model not inherited so none exists
+            else:
+                # Check if Object has a Read stage for 'Read Image'
+                read_stages = soup_object.find_all('stage', type='Read', recursive=False)
+                for read_stage in read_stages:
+                    steps = read_stage.find_all('step', recursive=False)
+                    if steps:
+                        for step in steps:
+                            step_name = step.action.id.string
+                            if step_name == 'ReadBitmap':
+                                return Settings.OBJECT_TYPES['surface auto base'], True
+
+                # Otherwise assume not Surface Automation
+                else:
+                    return Settings.OBJECT_TYPES['wrapper'], True
