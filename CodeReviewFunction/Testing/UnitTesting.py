@@ -20,7 +20,7 @@ release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeRe
                 "/Testing/SAM Processed XML/Multi-Process.xml"
 # Additional
 release_path_ = "C:/Users/MorganCrouch/Desktop/Bunnings Cloud Storage.bprelease"  # Really shitty object
-release_path_ = "C:/Users/MorganCrouch/Desktop/SDO 20190111.bprelease"
+release_path = "C:/Users/MorganCrouch/Desktop/SDO 20190111.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/zTemplateBackupExport.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/Orora Backup 20180328.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/BTS-IBMSynergyBillingDataUpdate-Release-V2.1.bprelease"
@@ -35,9 +35,9 @@ release_path_ = "C:/Users/MorganCrouch/Desktop/Another Delete.xml"
 # Pickled Tests
 pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/LAMP_pickled_soups.txt"
-pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
-                "/Testing/Fixtures/MERS_pickled_soup.txt"
 pickled_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                "/Testing/Fixtures/MERS_pickled_soup.txt"
+pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/MI_Premium_pickled_soups.txt"
 pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/multi_process_pickled_soups.txt"
@@ -86,10 +86,10 @@ if __name__ == '__main__':
     print('__main__ running for UnitTesting')
     full_speed_start = time.clock()
     # --- To Use Raw XML ---
-    # sub_soups = deserialize_to_soup(extract_pickled_soups(get_local_xml(release_path)))
+    sub_soups = deserialize_to_soup(extract_pickled_soups(get_local_xml(release_path)))
     # -- To Use Pre-Pickled ---
-    pickled_results = get_local_pickled_results(pickled_path)
-    sub_soups = deserialize_to_soup(pickled_results)
+    # pickled_results = get_local_pickled_results(pickled_path)
+    # sub_soups = deserialize_to_soup(pickled_results)
 
     print_sub_soups_contents(sub_soups)
 
@@ -99,9 +99,14 @@ if __name__ == '__main__':
         object_name = soup_object.get('name')
         object_type, estimated = SoupUtilities.determine_object_type(object_name.lower(), soup_object)
         metadata['object type'] = object_type
+
+        a = {'Delivery Stage': ''}
+        metadata['additional info'] = a
+        metadata['additional info']['Delivery Stage'] = 'Production'
+
         print('\n=== Current Object: {} ({}) ==='.format(object_name, object_type))
 
-        consideration = CheckObjectsNoBusinessLogic()
+        consideration = CheckActionsReusable()
         consideration.check_consideration(soup_object, metadata)
     consid_end = time.clock()
 

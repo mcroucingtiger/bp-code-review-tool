@@ -1,8 +1,8 @@
 # Object Settings
-WARNING_STAGES_PER_PAGE = 15
+WARNING_STAGES_PER_PAGE = 12
 """Warning point for number of stages that an Action page should have."""
 
-MAX_STAGES_PER_PAGE = 25
+MAX_STAGES_PER_PAGE = 20
 """Maximum number of stages that an Action page should have."""
 
 WARNING_IMAGE_WIDTH = 180
@@ -47,9 +47,10 @@ WARNING_ELEMENT_COUNT = 130
 
 WARNING_ELEMENT_MINIMUM = 10
 """Warning if a flat App Model is found but there are less than this many elements."""
+
 ACTIONS_PER_PAGE_WRAPPER_RATIO = 3
 "Ratio of how many Action stages to a sub-sheet (i.e. per Action page) to suggest that the Object is a wrapper. "
+
 WARNING_ELEMENT_TYPE_LENGTH = 16
 
-def checker_test(expression: str):
-    return re.sub('\[.*?\]', '[]', expression)
+

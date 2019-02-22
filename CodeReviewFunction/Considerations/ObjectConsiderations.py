@@ -510,6 +510,7 @@ class CheckActionsUseAttach(Consideration):
 
         # Wrapper Actions do not require an Attach as the first stage.
         # Check the Action does not contain a word from the blacklist and ensure the first stage is a Attach.
+        # TODO: check this works. 'metadata' got deleted and there were not flags for errors...
         if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
             for action_page in action_pages:
                 action_name = action_page.next_element.string
@@ -603,9 +604,6 @@ class CheckActionStartWait(Consideration):
 class CheckGlobalTimeoutUsedWaits(Consideration):
     """Checks that Global timeout data items exist on the Initialise page and ensure that they are used for
     all Wait stages within the Object.
-
-    Scoring is based on amount of errors, and as it can't distinguish between the error of having no global data items
-    vs not using global data items in a couple Wait stages, any error will result in a hrad fail.
     """
     CONSIDERATION_NAME = "Global variable enable a quick change to timeout values when application " \
                          "behaviour dictates."
@@ -620,10 +618,7 @@ class CheckGlobalTimeoutUsedWaits(Consideration):
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         # Don't check wait stages if Surface Automation used
-        # TODO: Need a better implementation of this. Makes this completely redundant for surface automation
-        if metadata['additional info']['Surface Automation Used?'] == 'TRUE':
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
-            return
+        # TODO: In future, go through all the 'Sleep' Actions and ensure they use global timeouts too
 
         data_stages = soup.find_all('stage', type='Data')
         wait_stages = soup.find_all('stage', type='WaitStart')
@@ -635,7 +630,7 @@ class CheckGlobalTimeoutUsedWaits(Consideration):
 
         if not init_data_items:
             self.errors_list.append(error_as_dict("No global timeout Data items", "Initialise"))
-            self._force_result(Result.NO, 0)
+            self._force_result(Result.NO, 0)  # hard fail the entire consideration
             return
 
         for wait_stage in wait_stages:
@@ -866,14 +861,107 @@ class CheckWaitTimeoutToException(Consideration):
             self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
 
-# Topic: Re-useable Actions
+# Topic: Re-usable Actions
+class CheckActionsReusable(Consideration):
+        CONSIDERATION_NAME = "Are the actions re-useable?"
+        # Settings
+        PASS_HURDLE = 0
+        FREQUENTLY_HURDLE = 2
+        INFREQUENTLY_HURDLE = 4
+
+        def __init__(self): super().__init__()
+
+        def check_consideration(self, soup: BeautifulSoup, metadata):
+            """Check to ensure a base Action uses only all reads, all writes or all navigates."""
+            if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+                NAVIGATE_ACTION_WHITELIST = ['DetachApplication', 'ActivateApp', 'AttachApplication']
+
+                read_subsheetids = []
+                write_subsheetids = []
+                navigate_subsheetids = []
+
+                read_stages = soup.find_all('stage', type='Read', recursive=False)
+                write_stages = soup.find_all('stage', type='Write', recursive=False)
+                navigate_stages = soup.find_all('stage', type='Navigate', recursive=False)
+                action_subsheets = get_action_subsheets(soup)
+
+                # Get all subsheetids
+                for read_stage in read_stages:
+                    subsheetid = read_stage.subsheetid
+                    if subsheetid:
+                        read_subsheetids.append(subsheetid.string)
+
+                for write_stage in write_stages:
+                    subsheetid = write_stage.subsheetid
+                    if subsheetid:
+                        write_subsheetids.append(subsheetid.string)
+
+                # Don't add Activate App navigation's to the list as they are acceptable to use with read/writes
+                for navigate_stage in navigate_stages:
+                    subsheetid = navigate_stage.subsheetid
+                    if subsheetid:
+                        steps = navigate_stage.find_all('step', recursive=False)
+                        ignore_navigate = False
+                        for step in steps:
+                            action = step.action.id.string
+                            if action in NAVIGATE_ACTION_WHITELIST:
+                                ignore_navigate = True
+                                break
+                        if not ignore_navigate:
+                            navigate_subsheetids.append(subsheetid.string)
+
+                # Remove duplicates
+                read_set = set(read_subsheetids)
+                write_set = set(write_subsheetids)
+                navigate_set = set(navigate_subsheetids)
+
+                read_and_write = read_set.intersection(write_set)
+                read_and_navigate = read_set.intersection(navigate_set)
+                navigate_and_write = navigate_set.intersection(write_set)
+                read_write_navigate = read_set & write_set & navigate_set
+
+                # Remove duplicates that have all three
+                for subsheet_with_all in read_write_navigate:
+                    read_and_write.remove(subsheet_with_all)
+                    read_and_navigate.remove(subsheet_with_all)
+                    navigate_and_write.remove(subsheet_with_all)
+
+                # Create errors for Actions with more than read, write or nav
+                for duplicate_subsheetid in read_and_write:
+                    action_name = subsheetid_to_action(duplicate_subsheetid, action_subsheets)
+                    error_str = "Action contains both a Read and a Write stage. " \
+                                "\nBase Actions should only have one form of interaction for reusability."
+                    self.errors_list.append(error_as_dict(error_str, action_name))
+
+                for duplicate_subsheetid in read_and_navigate:
+                    action_name = subsheetid_to_action(duplicate_subsheetid, action_subsheets)
+                    error_str = "Action contains both a Read and a Navigate stage. " \
+                                "\nBase Actions should only have one form of interaction for reusability."
+                    self.errors_list.append(error_as_dict(error_str, action_name))
+
+                for duplicate_subsheetid in navigate_and_write:
+                    action_name = subsheetid_to_action(duplicate_subsheetid, action_subsheets)
+                    error_str = "Action contains both a Navigate and a Write stage. " \
+                                "\nBase Actions should only have one form of interaction for reusability."
+                    self.errors_list.append(error_as_dict(error_str, action_name))
+
+                for subsheet_with_all in read_write_navigate:
+                    action_name = subsheetid_to_action(subsheet_with_all, action_subsheets)
+                    error_str = "Action contains Read, Write and Navigate stages. " \
+                                "\nBase Actions should only have one form of interaction for reusability."
+                    self.errors_list.append(error_as_dict(error_str, action_name))
+
+            # Unable to check reusability of wrappers due to complexity
+            elif metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
+                self._force_result(Result.NO, 0, 0)
+
+
 class CheckObjectsNoBusinessLogic(Consideration):
     CONSIDERATION_NAME = "Is there no Business Logic that should be in a Process?"
     # Settings
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 4
     INFREQUENTLY_HURDLE = 7
-    # TODO: Wait for response from Xave about checking Base objects
 
     def __init__(self): super().__init__()
 
@@ -1065,7 +1153,7 @@ class CheckNoActionCalledInAction(Consideration):
         action_stages = soup.find_all('stage', type='Action', recursive=False)
 
         # Consideration not applicable to wrappers
-        if ['object type'] == Settings.OBJECT_TYPES['wrapper']:
+        if metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
             self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
         if action_stages:
@@ -1295,19 +1383,28 @@ class CheckLoggingAdhereToPolicy(Consideration):
     CONSIDERATION_NAME = "Does logging adhere to local Security Policy?"
     # Settings
     PASS_HURDLE = 0
-    FREQUENTLY_HURDLE = 3
-    INFREQUENTLY_HURDLE = 6
+    FREQUENTLY_HURDLE = 4
+    INFREQUENTLY_HURDLE = 7
+
+    LOGGING_MODE = {
+        'disabled': 1,
+        'errors only': 2,
+        'enabled': 3
+    }
 
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         NO_LOGGING_TYPES = ['SubSheetInfo', 'ProcessInfo', 'Note', 'Data', 'Collection', 'Block', 'Anchor']
 
-        all_disabled = True
-        all_errors = True
-        exception_stage_types = []
-        if metadata['additional info']['Delivery Stage'] == 'Production':
+        # TODO: This data needs to come from metadata
+        all_disabled = False
+        all_errors_only = False
+        allowed_logging_stage_types = ['Exception', 'Calculation', 'Decision']
+        allowed_logging_mode = self.LOGGING_MODE['errors only']
 
+        # TODO: Have metadata override if this check is to be done in testing or UAT
+        if metadata['additional info']['Delivery Stage'] == 'Production':
             action_subsheets = get_action_subsheets(soup)
             all_stages = soup.find_all('stage', recursive=False)
 
@@ -1316,23 +1413,71 @@ class CheckLoggingAdhereToPolicy(Consideration):
                 stage_type = stage.get('type')
 
                 if stage_type not in NO_LOGGING_TYPES:
-                    if stage.loginhibit:
-                        if stage.loginhibit.get('onsuccess'):
-                            # Ready for if SAM business rules are updated
-                            # print("Error Only: {} of  {}".format(stage_name, stage_type))
-                            pass
-                        else:
-                            # print("Disabled: {} of  {}".format(stage_name, stage_type))
-                            pass
-                    elif stage_type != 'Exception':
-                        if stage.subsheetid:
-                            action_name = subsheetid_to_action(stage.subsheetid.string, action_subsheets)
-                        error_str = "Logging Enabled: {} stage '{}'".format(stage_type, stage_name)
-                        self.errors_list.append(error_as_dict(error_str, action_name))
+                    stage_logging_mode = self._get_stage_logging(stage)
+
+                    if all_disabled:
+                        if not stage_logging_mode <= self.LOGGING_MODE['disabled']:
+                            # Current stage type isn't valid
+                            if stage_type not in allowed_logging_stage_types:
+                                if stage.subsheetid:  # Skips stages on initialise page
+                                    action_name = subsheetid_to_action(stage.subsheetid.string, action_subsheets)
+                                    error_str = "Logging is not disabled: {} stage '{}'".format(stage_type, stage_name)
+                                    self.errors_list.append(error_as_dict(error_str, action_name))
+                                    print(error_str)
+                                    print(action_name + '\n')
+                            # Current stage type is valid
+                            else:
+                                # Current stages logging mode is less strict than the allowed logging mode
+                                if not stage_logging_mode <= allowed_logging_mode:
+                                    if stage.subsheetid:  # Skips stages on initialise page
+                                        action_name = subsheetid_to_action(stage.subsheetid.string, action_subsheets)
+                                        error_str = "Stage's type is in the logging exception list, " \
+                                                    "but logging type is less strict than the allowed mode: " \
+                                                    "{} stage '{}'".format(stage_type, stage_name)
+                                        self.errors_list.append(error_as_dict(error_str, action_name))
+                                        print(error_str)
+                                        print(action_name + '\n')
+
+                    elif all_errors_only:
+                        if not stage_logging_mode <= self.LOGGING_MODE['errors only']:
+                            # Current stage type isn't valid
+                            if stage_type not in allowed_logging_stage_types:
+                                if stage.subsheetid:  # Skips stages on initialise page
+                                    action_name = subsheetid_to_action(stage.subsheetid.string, action_subsheets)
+                                    error_str = "Logging should not be enabled: {} stage '{}'"\
+                                        .format(stage_type, stage_name)
+                                    self.errors_list.append(error_as_dict(error_str, action_name))
+                                    print(error_str)
+                                    print(action_name + '\n')
+
+                            # Current stage type is valid
+                            else:
+                                # Current stages logging mode is less strict than the allowed logging mode
+                                if not stage_logging_mode <= allowed_logging_mode:
+                                    if stage.subsheetid:  # Skips stages on initialise page
+                                        action_name = subsheetid_to_action(stage.subsheetid.string, action_subsheets)
+                                        error_str = "Stage's type in logging exception list, " \
+                                                    "but logging type is less strict than the allowed mode: " \
+                                                    "{} stage '{}'".format(stage_type, stage_name)
+                                        self.errors_list.append(error_as_dict(error_str, action_name))
+                                        print(error_str)
+                                        print(action_name + '\n')
 
         # Consideration not applicable when in Dev or Testing
         else:
             self._force_result(Result.NOT_APPLICABLE, 0, 0)
+
+    def _get_stage_logging(self, stage):
+        """Return the logging status of the current stage."""
+        # Logging is off
+        if stage.loginhibit:
+            if stage.loginhibit.get('onsuccess'):
+                return self.LOGGING_MODE['errors only']
+            else:
+                return self.LOGGING_MODE['disabled']
+        # Logging is on
+        else:
+            return self.LOGGING_MODE['enabled']
 
 
 # Topic: Images
