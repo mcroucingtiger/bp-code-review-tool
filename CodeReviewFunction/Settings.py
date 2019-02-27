@@ -49,8 +49,14 @@ WARNING_ELEMENT_MINIMUM = 10
 """Warning if a flat App Model is found but there are less than this many elements."""
 
 ACTIONS_PER_PAGE_WRAPPER_RATIO = 3
-"Ratio of how many Action stages to a sub-sheet (i.e. per Action page) to suggest that the Object is a wrapper. "
+"""Ratio of how many Action stages to a sub-sheet (i.e. per Action page) to suggest that the Object is a wrapper."""
 
 WARNING_ELEMENT_TYPE_LENGTH = 16
+
+WIN32_ELEMENT_TYPES = ['window', 'radiobutton', 'checkbox', 'button', 'edit', 'listbox', 'combobox',
+                       'treeview', 'tabcontrol', 'trackbar', 'updown', 'datetimepicker',
+                       'monthcalendarpicker', 'scrollbar', 'label', 'toolbar', 'datagrid',
+                       'datagridview']
+"""Base types of elements that are spied in Win32."""
 
 

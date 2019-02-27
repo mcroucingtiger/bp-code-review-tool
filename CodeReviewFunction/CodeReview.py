@@ -63,9 +63,9 @@ def test_with_local():
     print("Getting release off desktop")
 
     # Releases with Header
-    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
-                    "/Testing/SAM Processed XML/LAMP.xml"
     release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                    "/Testing/SAM Processed XML/LAMP.xml"
+    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                     "/Testing/SAM Processed XML/MERS.xml"
     release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                     "/Testing/SAM Processed XML/MI Report.xml"

@@ -20,12 +20,10 @@ release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeRe
                 "/Testing/SAM Processed XML/Multi-Process.xml"
 # Additional
 release_path_ = "C:/Users/MorganCrouch/Desktop/Bunnings Cloud Storage.bprelease"  # Really shitty object
-release_path = "C:/Users/MorganCrouch/Desktop/SDO 20190111.bprelease"
+release_path_ = "C:/Users/MorganCrouch/Desktop/SDO 20190111.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/zTemplateBackupExport.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/Orora Backup 20180328.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/BTS-IBMSynergyBillingDataUpdate-Release-V2.1.bprelease"
-
-
 
 # Dummy
 release_path_ = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
@@ -35,7 +33,7 @@ release_path_ = "C:/Users/MorganCrouch/Desktop/Another Delete.xml"
 # Pickled Tests
 pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/LAMP_pickled_soups.txt"
-pickled_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/MERS_pickled_soup.txt"
 pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/MI_Premium_pickled_soups.txt"
@@ -106,7 +104,7 @@ if __name__ == '__main__':
 
         print('\n=== Current Object: {} ({}) ==='.format(object_name, object_type))
 
-        consideration = CheckActionsReusable()
+        consideration = CheckTechnologySpecificAttributes()
         consideration.check_consideration(soup_object, metadata)
     consid_end = time.clock()
 

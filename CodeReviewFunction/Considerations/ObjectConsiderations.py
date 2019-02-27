@@ -3,6 +3,7 @@ import logging
 import inspect
 import sys
 import re
+import time
 from ..ReportPage import error_as_dict, warning_as_dict, Result
 from .ConsiderationAbstract import Consideration
 from .. import Settings
@@ -160,6 +161,149 @@ class CheckElementsLogicallyBrokenDown(Consideration):
 
 
 # Topic: Element - Names
+class CheckTechnologySpecificAttributes(Consideration):
+
+    CONSIDERATION_NAME = "All technology specific attributes have been checked / unchecked?"
+
+    APPLICATION_TYPES = ['HTML', 'Java', 'Win32', 'Browser', 'Mainframe']
+    ELEMENT_TYPE_WHITELIST = ['box', 'button', 'label', 'field', 'link', 'text', 'tab', 'main', 'title', 'window',
+                              'region', 'list', 'popup', 'input', 'header', 'section', 'table', 'element',
+                              'edit', 'toolbar']
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 3
+    INFREQUENTLY_HURDLE = 5
+
+    def __init__(self): super().__init__()
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        win32_attrs_disabled = ['X', 'Y', 'Width', 'Height', 'ScreenBounds', 'pCtrlID', 'pHeight', 'pWidth', 'pX', 'pY']
+        html_attrs_disabled = ['X', 'Y', 'Width', 'Height', 'ScreenBounds', 'pURL', 'Link']
+        java_attrs_disabled = ['X', 'Y', 'Width', 'Height', 'ScreenBounds']
+        uia_attrs_disabled = ['uX', 'uY', 'uWidth', 'uHeight', 'uProcessId']
+        aa_attrs_disabled = ['paHeight', 'paWidth', 'paY', 'paX', 'ScreenBounds', 'aHeight', 'aWidth', 'aY', 'aX',
+                             'pHeight', 'pWidth', 'pY', 'pX', 'pCtrlID', 'Height', 'Width', 'Y', 'X', 'CtrlID']
+
+        java_attrs_enabled = ['MatchIndex', 'AncestorCount', 'Showing']
+        aa_attrs_enabled = ['MatchIndex', 'Invisible']
+        # Note: Doesnt do surface automation regions or region-containers
+
+        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+            appdef = soup.find('appdef', recursive=False)
+            inherits_app_model = soup.find('parentobject', recursive=False)
+
+            if appdef:  # Ensure the base Object has an application model
+                if not inherits_app_model:
+                    elements = appdef.find_all('element')
+                    application_type = appdef.find('apptypeinfo', recursive=False).find('id', recursive=False).string
+                    application_type = application_type.replace('Launch', '').replace('Attach', '')
+
+                    if application_type not in self.APPLICATION_TYPES:
+                        error_str = "Unknown application type"
+                        self.errors_list.append(error_as_dict(error_str, application_type))
+                        self._force_result(Result.NO, 0)  # Can't evaluate if don't recognise application type
+
+                    # Check Java App Model settings are correct
+                    if application_type == 'Java':
+                        app_parameters = appdef.find('apptypeinfo', recursive=False).parameters.contents
+                        for app_parameter in app_parameters:
+                            if app_parameter.name == 'ProcessMode':
+                                if not (app_parameter.value == 'Ext64bit' or app_parameter.value == 'Ext32bit'):
+                                    error_str = "Application Manager mode is not set to External 32/64 bit as " \
+                                                "recommended when using the JAB."
+                                    self.errors_list.append(error_as_dict(error_str, ""))
+                            if app_parameter.name == 'CommandLineParams':
+                                if 'ignorenotshowing' not in app_parameter.value:
+                                    warning_str = "Recommend to use 'ignorenotshowing' command line param to ignore" \
+                                                  "hidden elements and so increase search performance."
+                                    self.warning_list.append(warning_as_dict(warning_str, ""))
+
+                    # Ignore the root element and validate all elements' attributes
+                    root_element_found = False
+                    for element in elements:
+                        element_basetype = element.find('basetype', recursive=False).string
+                        if not root_element_found:
+                            if element_basetype == 'Application':
+                                root_element_found = True
+                                continue
+
+                        if 'Win' in element_basetype:
+                            self._check_element_attributes(element, element_basetype, win32_attrs_disabled)
+                        elif 'HTML' in element_basetype:
+                            self._check_element_attributes(element, element_basetype, html_attrs_disabled)
+                        elif 'AA' in element_basetype:
+                            self._check_element_attributes(element, element_basetype, aa_attrs_disabled,
+                                                           aa_attrs_enabled)
+                        elif 'UIA' in element_basetype:
+                            self._check_element_attributes(element, element_basetype, uia_attrs_disabled)
+                        elif 'Java' in element_basetype:
+                            self._check_element_attributes(element, element_basetype, java_attrs_disabled,
+                                                           java_attrs_enabled)
+                        elif 'SAP' in element_basetype:
+                            # Can't check SAP as there are only two attributes.
+                            pass
+                        else:
+                            if element_basetype.lower() in Settings.WIN32_ELEMENT_TYPES:
+                                self._check_element_attributes(element, element_basetype, win32_attrs_disabled)
+                            else:
+                                print(element_basetype + " is a basetype we haven't seen")
+
+                # Object doesn't have it's own App Model to search (inherits)
+                else:
+                    self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            else:
+                error_str = "Base Object that does not have an App Model nor does it inherit one."
+                self.errors_list.append(error_as_dict(error_str, ""))
+
+        # Object is a wrapper
+        else:
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+
+    def _check_element_attributes(self, element: Tag, element_basetype, attrs_disabled=None, attrs_enabled=None):
+        element_name = element.get('name')
+        # Find all attributes that are used to Match for this element
+        attributes_in_use = []
+        attributes = element.find('attributes', recursive=False).contents
+        for attribute in attributes:
+            if attribute.get('inuse'):
+                attributes_in_use.append(attribute)
+
+        attrs_not_disabled = []
+        # Loop through all attributes that should or shouldn't be enabled
+        # and add them ot a list
+        for attribute_used in attributes_in_use:
+            attr_name = attribute_used.get('name')
+            if attrs_disabled:
+                if attr_name in attrs_disabled:
+                    if not attribute_used.get('comparisontype'):  # Attribute is dynamic / wildcard
+                        # Don't add an error if Link or ParentURL are selected but have empty values
+                        if attr_name == 'Link' or attr_name == 'pURL':
+                            if attribute_used.contents[0].get('value'):
+                                attrs_not_disabled.append(attr_name)
+                        else:
+                            attrs_not_disabled.append(attr_name)
+            if attrs_enabled:
+                if attr_name in attrs_enabled:
+                    attrs_enabled.remove(attr_name)  # Remove them if selected and so list only contains what's left
+
+        # Gets all attributes that should be disabled and lists them in the error
+        if attrs_not_disabled:
+            attrs_not_disabled_str = str(attrs_not_disabled).replace('[', '').replace(']', '')
+            error_str = "Attribute(s) should not be used for element type '{}'\nAttributes: " \
+                .format(element_basetype)
+            error_str += attrs_not_disabled_str
+            self.errors_list.append(error_as_dict(error_str, element_name))
+
+        # Triggered if enabled list has not been cleared by finding all attrs being used.
+        if attrs_enabled:
+            attrs_enabled_str = str(attrs_enabled).replace('[', '').replace(']', '')
+            warning_str = "Attribute(s) are recommended to be be used for element type '{}'.\nAttributes: "\
+                .format(element_basetype)
+            warning_str += attrs_enabled_str
+            self.warning_list.append(warning_as_dict(warning_str, element_name))
+
+
+# Topic: Element attribute selection
 class CheckElementNamesFollowBestPractice(Consideration):
     # TODO: Ensure the metadata from checklist contains a check to flip the order name/type. This is used
     #  in the method params of _check_element_title
@@ -186,7 +330,8 @@ class CheckElementNamesFollowBestPractice(Consideration):
 
             if appdef:  # Ensure the base Object has an application model
                 if not inherits_app_model:
-                    application_type = appdef.apptypeinfo.id.string.replace('Launch', '').replace('Attach', '')
+                    application_type = appdef.find('apptypeinfo', recursive=False).find('id', recursive=False)
+                    application_type = application_type.string.replace('Launch', '').replace('Attach', '')
                     if application_type not in self.APPLICATION_TYPES:
                         error_str = "Unknown application type"
                         self.errors_list.append(error_as_dict(error_str, application_type))
@@ -241,10 +386,7 @@ class CheckElementNamesFollowBestPractice(Consideration):
 
          """
 
-        WIN32_ELEMENT_TYPES = ['window', 'radio button', 'check box', 'button', 'edit', 'list box', 'combo box',
-                               'tree view', 'tab control', 'track bar', 'up-down box', 'datetime picker',
-                               'month calendar picker', 'scroll bar', 'label', 'toolbar', '.net datagrid',
-                               '.net datagridview']
+
 
         element_name = element.get('name')
         element_base_type = element.find('basetype', recursive=False).string
@@ -284,7 +426,194 @@ class CheckElementNamesFollowBestPractice(Consideration):
                 right_bracket_idx = str.rfind(element_list[1], ')')
 
                 # Converts Windows elements with base_type 'Button' or 'Edit' to instead be 'Win32' for consistency
-                if element_base_type.lower() in WIN32_ELEMENT_TYPES:
+                if element_base_type.lower() in Settings.WIN32_ELEMENT_TYPES:
+                    element_base_type = 'Win32'
+
+                # Check if the correct spy mode was noted in the brackets e.g. (AA)
+                if left_bracket_idx != -1 and right_bracket_idx != -1:
+                    given_spy_type = element_list[1][left_bracket_idx + 1:right_bracket_idx]
+                    if given_spy_type.lower() != 'dynamic':
+                        if given_spy_type not in element_base_type:
+                            warning_str = "Stated spying mode '{}' is not the element's spy mode: '{}'" \
+                                .format(given_spy_type, element_base_type)
+                            self.warning_list.append(warning_as_dict(warning_str, element_name))
+
+                    # Brackets contain 'dynamic' but Spy mode not in the brackets when it should be
+                    else:
+                        if application_type not in element_base_type:
+                            warning_str = "Object's application type is '{}' but element's base type is '{}'. " \
+                                          "Please note the spy mode within brackets at the end of the element's name" \
+                                .format(application_type, element_base_type)
+                            self.warning_list.append(warning_as_dict(warning_str, element_name))
+
+                # Otherwise Spy mode not in the brackets when it should be
+                else:
+                    if application_type not in element_base_type:
+                        warning_str = "Object's application type is '{}' but element's base type is '{}'. " \
+                                      "Please note the spy mode within brackets at the end of the element's name"\
+                            .format(application_type, element_base_type)
+                        self.warning_list.append(warning_as_dict(warning_str, element_name))
+
+        if self._element_is_dynamic(element):
+            if 'dynamic' not in element_name.lower():
+                warning_str = "Element has a dynamic attribute. Please include 'Dynamic' in the element name"
+                self.warning_list.append(warning_as_dict(warning_str, element_name))
+
+        return True
+
+    def _correct_hyphen_formatting(self, element_name, element_list):
+        """Ensure the element name contains a single hyphen for formatting purposes."""
+        if len(element_list) >= 3:
+            error_str = "Element name contains multiple hyphen. Use the native tree structure" \
+                        " to order the app model"
+            self.errors_list.append(error_as_dict(error_str, element_name))
+            return False
+        elif len(element_list) == 1:
+            if '-' in element_name:
+                error_str = "Element name contains a hyphen, but it is not properly used for formatting. " \
+                            "Ensure there is a space on each side of the hyphen."
+                self.errors_list.append(error_as_dict(error_str, element_name))
+                False
+            else:
+                error_str = "Element name does not contain a hyphen to split the name for correct formatting"
+                self.errors_list.append(error_as_dict(error_str, element_name))
+                return False
+
+        elif len(element_list) == 2:
+            return True
+
+    @staticmethod
+    def _element_is_dynamic(element: Tag):
+        attributes = element.attributes
+        if attributes.find('attribute', comparisontype='dynamic', recursive=False) is not None:
+            return True
+        else:
+            return False
+
+
+class CheckElementNamesFollowBestPractice(Consideration):
+    # TODO: Ensure the metadata from checklist contains a check to flip the order name/type. This is used
+    #  in the method params of _check_element_title
+
+    CONSIDERATION_NAME = "Do the element names follow BP best practice or local naming convention?"
+
+    APPLICATION_TYPES = ['HTML', 'Java', 'Win32', 'Browser', 'Mainframe']
+    ELEMENT_TYPE_WHITELIST = ['box', 'button', 'label', 'field', 'link', 'text', 'tab', 'main', 'title', 'window',
+                              'region', 'list', 'popup', 'input', 'header', 'section', 'table', 'element',
+                              'edit', 'toolbar']
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 3
+    INFREQUENTLY_HURDLE = 5
+
+    def __init__(self): super().__init__()
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        """Check that best practice was used when naming the App Modeller tree elements."""
+        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+            appdef = soup.find('appdef', recursive=False)
+            inherits_app_model = soup.find('parentobject', recursive=False)
+            elements = appdef.find_all('element')
+
+            if appdef:  # Ensure the base Object has an application model
+                if not inherits_app_model:
+                    application_type = appdef.find('apptypeinfo', recursive=False).find('id', recursive=False)
+                    application_type = application_type.string.replace('Launch', '').replace('Attach', '')
+                    if application_type not in self.APPLICATION_TYPES:
+                        error_str = "Unknown application type"
+                        self.errors_list.append(error_as_dict(error_str, application_type))
+                        self._force_result(Result.NO, 0)  # Can't evaluate if don't recognise application type
+
+                    root_element_found = False
+                    for element in elements:
+                        if not root_element_found:
+                            element_basetype = element.find('basetype', recursive=False).string
+                            if element_basetype == 'Application':
+                                root_element_found = True
+                            if root_element_found:  # Skip the root element
+                                continue
+                        self._check_element_title(element, application_type)
+
+                    # Checks specific to Surface Automation Base Objects
+                    if metadata['object type'] == Settings.OBJECT_TYPES['surface auto base']:
+                        regions = appdef.find_all('region')
+                        for region in regions:
+                            region_name = region.get('name')
+                            if self._element_is_dynamic(region):
+                                if 'dynamic' not in region_name.lower():
+                                    warning_str = "Region has a dynamic attribute. " \
+                                                  "Please include 'Dynamic' in the element name"
+                                    self.warning_list.append(warning_as_dict(warning_str, region_name))
+
+                # Object doesn't have it's own App Model to search (inherits)
+                else:
+                    self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            else:
+                error_str = "Base Object that does not have an App Model nor does it inherit one."
+                self.errors_list.append(error_as_dict(error_str, ""))
+
+        else:
+            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+
+    def _check_element_title(self, element: Tag, application_type: str, element_type_start=True):
+        """Check the element name conforms to best practice and add a warning/error if it does not.
+
+        Best practice is to have the element type, hyphen, element name and then if necessary (dynamic) if it uses any
+        dynamic attributes and the spy mode if it is not the elements native spy mode in brackets on the end
+        e.g. 'Field - Username (Dynamic) (Win32)'
+
+         Args:
+             element: The element tag to be checked.
+             application_type: How the App Modeller has been set to recognise the application (Win32, Java, Browser)
+             element_type_start: Local naming convention order for which side of the hyphen type/name goes.
+                False for "element_name - element_type"
+
+        Returns:
+            bool: If the element conforms to best practice.  True for success, False otherwise.
+
+         """
+
+
+
+        element_name = element.get('name')
+        element_base_type = element.find('basetype', recursive=False).string
+        type_idx, name_idx = 0, 1
+
+        if not element_type_start:
+            type_idx, name_idx = 1, 0
+
+        # Check correct use of hyphen for formatting
+        element_list = element_name.split(' - ')
+        if not self._correct_hyphen_formatting(element_name, element_list):
+            return False
+
+        # Check the element type within the name matches the whitelist
+        if any(element_type in element_list[type_idx].lower() for element_type in self.ELEMENT_TYPE_WHITELIST):
+            if len(element_list[type_idx]) >= Settings.WARNING_ELEMENT_TYPE_LENGTH:
+                warning_str = "Element type may be excessively long".format()
+                self.warning_list.append(warning_as_dict(warning_str, element_list[type_idx]))
+        # If element type isn't valid, flag error and strip spy mode from element type if needed
+        else:
+            if not element_type_start:
+                left_bracket_idx = str.rfind(element_list[1], '(')
+                if left_bracket_idx != -1:
+                    element_list[1] = element_list[1][0:left_bracket_idx]
+            error_str = "'{}' not in the element type whitelist".format(element_list[type_idx])
+            self.errors_list.append(error_as_dict(error_str, element_name))
+            return False
+
+        # Check the element type is correctly labeled, if it isn't the native app spying mode
+        if application_type not in element_base_type:
+            # If application is Win32, SAP spy mode doesn't need to be mentioned in brackets
+            if 'SAP' in element_base_type and application_type == 'Win32':
+                pass
+            # Element was spied with a mode different to the native app mode
+            else:
+                left_bracket_idx = str.rfind(element_list[1], '(')  # reverse find used to find the final ()
+                right_bracket_idx = str.rfind(element_list[1], ')')
+
+                # Converts Windows elements with base_type 'Button' or 'Edit' to instead be 'Win32' for consistency
+                if element_base_type.lower() in Settings.WIN32_ELEMENT_TYPES:
                     element_base_type = 'Win32'
 
                 # Check if the correct spy mode was noted in the brackets e.g. (AA)
@@ -658,6 +987,7 @@ class CheckWaitNotArbitrary(Consideration):
 
         If 'Surface Automation Used?' in the configuration settings form is TRUE, this check will be ignored.
         """
+        # TODO: Make sure an exception is made for Java automaiton, where arbitrary waits are acceptable
         # Don't check wait stages if Surface Automation used
         if metadata['additional info']['Surface Automation Used?'] == 'TRUE':
             self._force_result(Result.NOT_APPLICABLE, 0, 0)
