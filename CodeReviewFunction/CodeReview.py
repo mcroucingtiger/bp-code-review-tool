@@ -63,7 +63,7 @@ def test_with_local():
     print("Getting release off desktop")
 
     # Releases with Header
-    release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                     "/Testing/SAM Processed XML/LAMP.xml"
     release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                     "/Testing/SAM Processed XML/MERS.xml"
@@ -73,6 +73,10 @@ def test_with_local():
                    "/Testing/SAM Processed XML/Multi-Process.xml"
     release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                    "/Testing/SAM Processed XML/SDO Surface Auto.xml"
+    release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                   "/Testing/SAM Processed XML/Fiserv Current.xml"
+
+
 
     xml_string = get_local_xml(release_path)
 

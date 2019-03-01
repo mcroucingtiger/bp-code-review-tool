@@ -10,7 +10,7 @@ from ..Considerations.ProcessConsiderations import *
 
 
 # Main
-release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                "/Testing/SAM Processed XML/LAMP.xml"
 release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/SAM Processed XML/MERS.xml"
@@ -20,10 +20,12 @@ release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeRe
                 "/Testing/SAM Processed XML/Multi-Process.xml"
 # Additional
 release_path_ = "C:/Users/MorganCrouch/Desktop/Bunnings Cloud Storage.bprelease"  # Really shitty object
-release_path_ = "C:/Users/MorganCrouch/Desktop/SDO 20190111.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/zTemplateBackupExport.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/Orora Backup 20180328.bprelease"
 release_path_ = "C:/Users/MorganCrouch/Desktop/BTS-IBMSynergyBillingDataUpdate-Release-V2.1.bprelease"
+release_path_ = "C:/Users/MorganCrouch/Desktop/CMDB25may.bprelease"  # NAB Clusterfuck
+release_path_ = "C:/Users/MorganCrouch/Desktop/Central Accounting - Bank Feeds v0.96 (Fiserv Andrew).bprelease"
+
 
 # Dummy
 release_path_ = "C:/Users/MorganCrouch/Desktop/Testing Release.bprelease"
@@ -104,7 +106,7 @@ if __name__ == '__main__':
 
         print('\n=== Current Object: {} ({}) ==='.format(object_name, object_type))
 
-        consideration = CheckTechnologySpecificAttributes()
+        consideration = CheckValuesContainCustomerData()
         consideration.check_consideration(soup_object, metadata)
     consid_end = time.clock()
 
