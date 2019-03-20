@@ -49,7 +49,7 @@ def extract_soup_from_xml(strainer_param, xml_string):
     return individual_soup_str
 
 
-# Testing only
+# TODO: These two below should probably be in CodeReview
 def pickle_results_list(results):
     """Pickle the results list and save to a file to skip this step when testing"""
     file_location = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \

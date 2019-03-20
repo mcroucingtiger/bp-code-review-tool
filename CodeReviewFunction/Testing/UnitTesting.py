@@ -14,7 +14,7 @@ release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeRev
                "/Testing/SAM Processed XML/LAMP.xml"
 release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/SAM Processed XML/MERS.xml"
-release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/SAM Processed XML/MI Report.xml"
 release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/SAM Processed XML/Multi-Process.xml"
@@ -41,7 +41,7 @@ pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeRe
                 "/Testing/Fixtures/MI_Premium_pickled_soups.txt"
 pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/multi_process_pickled_soups.txt"
-pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+pickled_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/SDO_pickled_soups.txt"
 
 
@@ -106,7 +106,7 @@ if __name__ == '__main__':
 
         print('\n=== Current Object: {} ({}) ==='.format(object_name, object_type))
 
-        consideration = CheckValuesContainCustomerData()
+        consideration = CheckValuesContainEnvironmentData()
         consideration.check_consideration(soup_object, metadata)
     consid_end = time.clock()
 

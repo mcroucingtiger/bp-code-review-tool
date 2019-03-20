@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 
 
 class Consideration(ABC):
-    """Abstract class used as the parent for all consideration classes."""
+    """Abstract class used as the parent to instantiate all consideration classes."""
     CONSIDERATION_NAME = "Override - Title from Report"
 
     PASS_HURDLE = 0
@@ -68,7 +68,6 @@ class Consideration(ABC):
                     self.score = self.max_score
                     self.result = Result.YES
 
-
     def add_to_report(self, report_helper):
         """Add the consideration and its errors' within the the report_helper's considerations list.
 
@@ -77,10 +76,13 @@ class Consideration(ABC):
         report_helper.set_consideration(self.CONSIDERATION_NAME, self.max_score, self.score, self.result,
                                         self.errors_list, self.warning_list)
 
+    def _consideration_not_applicable(self):
+        self._force_result(Result.NOT_APPLICABLE, 0, 0)
+
     def _force_result(self, result, score, max_score=None):
         """Set the result of the consideration and override scoring of errors."""
         self.result_forced = True
         self.result = result
         self.score = score
-        if max_score:
+        if max_score is not None:
             self.max_score = max_score

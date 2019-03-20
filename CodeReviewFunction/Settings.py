@@ -55,7 +55,7 @@ WARNING_ELEMENT_TYPE_LENGTH = 16
 
 WIN32_ELEMENT_TYPES = ['window', 'radiobutton', 'checkbox', 'button', 'edit', 'listbox', 'combobox',
                        'treeview', 'tabcontrol', 'trackbar', 'updown', 'datetimepicker',
-                       'monthcalendarpicker', 'scrollbar', 'label', 'toolbar', 'datagrid',
+                       'monthcalendarpicker', 'scrollbar', 'label', 'toolbar', 'datagrid', 'listview',
                        'datagridview']
 """Base types of elements that are spied in Win32."""
 

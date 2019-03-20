@@ -21,6 +21,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("Python HTTP trigger function processed a request.")
 
     try:
+        logging.info("Attempting to get the body")
         req_body = req.get_body()
         xml_string = req_body
     except ValueError:
@@ -56,7 +57,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             status_code=400
         )
 
-
+# --- TESTING ONLY ---
 def test_with_local():
     print("Local testing running")
     report_pages = []

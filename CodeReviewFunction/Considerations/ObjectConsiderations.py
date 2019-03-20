@@ -158,7 +158,7 @@ class CheckElementsLogicallyBrokenDown(Consideration):
 
         # Object is a wrapper and so has no App Model to check (though not always the case)
         else:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
 
 # Topic: Element - Names
@@ -219,13 +219,13 @@ class CheckElementNamesFollowBestPractice(Consideration):
 
                 # Object doesn't have it's own App Model to search (inherits)
                 else:
-                    self._force_result(Result.NOT_APPLICABLE, 0, 0)
+                    self._consideration_not_applicable()
             else:
                 error_str = "Base Object that does not have an App Model nor does it inherit one."
                 self.errors_list.append(error_as_dict(error_str, ""))
 
         else:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
     def _check_element_title(self, element: Tag, application_type: str, element_type_start=True):
         """Check the element name conforms to best practice and add a warning/error if it does not.
@@ -323,7 +323,7 @@ class CheckElementNamesFollowBestPractice(Consideration):
     def _correct_hyphen_formatting(self, element_name, element_list):
         """Ensure the element name contains a single hyphen for formatting purposes."""
         if len(element_list) >= 3:
-            error_str = "Element name contains multiple hyphen. Use the native tree structure" \
+            error_str = "Element name contains multiple hyphens. Use the native tree structure" \
                         " to order the app model"
             self.errors_list.append(error_as_dict(error_str, element_name))
             return False
@@ -351,152 +351,9 @@ class CheckElementNamesFollowBestPractice(Consideration):
 
 
 # Topic: Element attribute selection
-class CheckTechnologySpecificAttributes(Consideration):
-
-    CONSIDERATION_NAME = "All technology specific attributes have been checked / unchecked?"
-
-    APPLICATION_TYPES = ['HTML', 'Java', 'Win32', 'Browser', 'Mainframe']
-    ELEMENT_TYPE_WHITELIST = ['box', 'button', 'label', 'field', 'link', 'text', 'tab', 'main', 'title', 'window',
-                              'region', 'list', 'popup', 'input', 'header', 'section', 'table', 'element',
-                              'edit', 'toolbar']
-    # Settings
-    PASS_HURDLE = 0
-    FREQUENTLY_HURDLE = 3
-    INFREQUENTLY_HURDLE = 5
-
-    def __init__(self): super().__init__()
-
-    def check_consideration(self, soup: BeautifulSoup, metadata):
-        win32_attrs_disabled = ['X', 'Y', 'Width', 'Height', 'ScreenBounds', 'pCtrlID', 'pHeight', 'pWidth', 'pX', 'pY']
-        html_attrs_disabled = ['X', 'Y', 'Width', 'Height', 'ScreenBounds', 'pURL', 'Link']
-        java_attrs_disabled = ['X', 'Y', 'Width', 'Height', 'ScreenBounds']
-        uia_attrs_disabled = ['uX', 'uY', 'uWidth', 'uHeight', 'uProcessId']
-        aa_attrs_disabled = ['paHeight', 'paWidth', 'paY', 'paX', 'ScreenBounds', 'aHeight', 'aWidth', 'aY', 'aX',
-                             'pHeight', 'pWidth', 'pY', 'pX', 'pCtrlID', 'Height', 'Width', 'Y', 'X', 'CtrlID']
-
-        java_attrs_enabled = ['MatchIndex', 'AncestorCount', 'Showing']
-        aa_attrs_enabled = ['MatchIndex', 'Invisible']
-        # Note: Doesnt do surface automation regions or region-containers
-
-        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
-            appdef = soup.find('appdef', recursive=False)
-            inherits_app_model = soup.find('parentobject', recursive=False)
-
-            if appdef:  # Ensure the base Object has an application model
-                if not inherits_app_model:
-                    elements = appdef.find_all('element')
-                    application_type = appdef.find('apptypeinfo', recursive=False).find('id', recursive=False).string
-                    application_type = application_type.replace('Launch', '').replace('Attach', '')
-
-                    if application_type not in self.APPLICATION_TYPES:
-                        error_str = "Unknown application type"
-                        self.errors_list.append(error_as_dict(error_str, application_type))
-                        self._force_result(Result.NO, 0)  # Can't evaluate if don't recognise application type
-
-                    # Check Java App Model settings are correct
-                    if application_type == 'Java':
-                        app_parameters = appdef.find('apptypeinfo', recursive=False).parameters.contents
-                        for app_parameter in app_parameters:
-                            if app_parameter.name == 'ProcessMode':
-                                if not (app_parameter.value == 'Ext64bit' or app_parameter.value == 'Ext32bit'):
-                                    error_str = "Application Manager mode is not set to External 32/64 bit as " \
-                                                "recommended when using the JAB."
-                                    self.errors_list.append(error_as_dict(error_str, ""))
-                            if app_parameter.name == 'CommandLineParams':
-                                if 'ignorenotshowing' not in app_parameter.value:
-                                    warning_str = "Recommend to use 'ignorenotshowing' command line param to ignore" \
-                                                  "hidden elements and so increase search performance."
-                                    self.warning_list.append(warning_as_dict(warning_str, ""))
-
-                    # Ignore the root element and validate all elements' attributes
-                    root_element_found = False
-                    for element in elements:
-                        element_basetype = element.find('basetype', recursive=False).string
-                        if not root_element_found:
-                            if element_basetype == 'Application':
-                                root_element_found = True
-                                continue
-
-                        elif 'SAP' in element_basetype:
-                            # Can't check SAP as there are only two attributes.
-                            continue
-                        if 'Win' in element_basetype:
-                            self._check_element_attributes(element, element_basetype, win32_attrs_disabled)
-                        elif 'HTML' in element_basetype:
-                            self._check_element_attributes(element, element_basetype, html_attrs_disabled)
-                        elif 'AA' in element_basetype:
-                            self._check_element_attributes(element, element_basetype, aa_attrs_disabled,
-                                                           aa_attrs_enabled)
-                        elif 'UIA' in element_basetype:
-                            self._check_element_attributes(element, element_basetype, uia_attrs_disabled)
-                        elif 'Java' in element_basetype:
-                            self._check_element_attributes(element, element_basetype, java_attrs_disabled,
-                                                           java_attrs_enabled)
-
-                        else:
-                            if element_basetype.lower() in Settings.WIN32_ELEMENT_TYPES:
-                                self._check_element_attributes(element, element_basetype, win32_attrs_disabled)
-                            else:
-                                print(element_basetype + " is a basetype we haven't seen")
-
-                # Object doesn't have it's own App Model to search (inherits)
-                else:
-                    self._force_result(Result.NOT_APPLICABLE, 0, 0)
-            else:
-                error_str = "Base Object that does not have an App Model nor does it inherit one."
-                self.errors_list.append(error_as_dict(error_str, ""))
-
-        # Object is a wrapper
-        else:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
-
-    def _check_element_attributes(self, element: Tag, element_basetype, attrs_disabled=None, attrs_enabled=None):
-        element_name = element.get('name')
-        # Find all attributes that are used to Match for this element
-        attributes_in_use = []
-        attributes = element.find('attributes', recursive=False).contents
-        for attribute in attributes:
-            if attribute.get('inuse'):
-                attributes_in_use.append(attribute)
-
-        attrs_not_disabled = []
-        # Loop through all attributes that should or shouldn't be enabled
-        # and add them ot a list
-        for attribute_used in attributes_in_use:
-            attr_name = attribute_used.get('name')
-            if attrs_disabled:
-                if attr_name in attrs_disabled:
-                    if not attribute_used.get('comparisontype'):  # Attribute is dynamic / wildcard
-                        # Don't add an error if Link or ParentURL are selected but have empty values
-                        if attr_name == 'Link' or attr_name == 'pURL':
-                            if attribute_used.contents[0].get('value'):
-                                attrs_not_disabled.append(attr_name)
-                        else:
-                            attrs_not_disabled.append(attr_name)
-            if attrs_enabled:
-                if attr_name in attrs_enabled:
-                    attrs_enabled.remove(attr_name)  # Remove them if selected and so list only contains what's left
-
-        # Gets all attributes that should be disabled and lists them in the error
-        if attrs_not_disabled:
-            attrs_not_disabled_str = str(attrs_not_disabled).replace('[', '').replace(']', '')
-            error_str = "Attribute(s) should not be used for element type '{}'\nAttributes: " \
-                .format(element_basetype)
-            error_str += attrs_not_disabled_str
-            self.errors_list.append(error_as_dict(error_str, element_name))
-
-        # Triggered if enabled list has not been cleared by finding all attrs being used.
-        if attrs_enabled:
-            attrs_enabled_str = str(attrs_enabled).replace('[', '').replace(']', '')
-            warning_str = "Attribute(s) are recommended to be be used for element type '{}'.\nAttributes: "\
-                .format(element_basetype)
-            warning_str += attrs_enabled_str
-            self.warning_list.append(warning_as_dict(warning_str, element_name))
-
-
 class CheckValuesContainCustomerData(Consideration):
 
-    CONSIDERATION_NAME = "No attribute values contain Customer data?"
+    CONSIDERATION_NAME = "No values contain any environment specific data?"
 
     APPLICATION_TYPES = ['HTML', 'Java', 'Win32', 'Browser', 'Mainframe']
     # Settings
@@ -555,17 +412,17 @@ class CheckValuesContainCustomerData(Consideration):
 
                 # Object doesn't have it's own App Model to search (inherits)
                 else:
-                    self._force_result(Result.NOT_APPLICABLE, 0, 0)
+                    self._consideration_not_applicable()
             else:
                 error_str = "Base Object that does not have an App Model nor does it inherit one."
                 self.errors_list.append(error_as_dict(error_str, ""))
 
         # Object is a wrapper
         else:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
     def _check_attributes_windows(self, element: Tag, element_basetype):
-        ATTRIBUTES_TO_CHECK = ['WindowText', 'AncestorsText']  # Could do pWindowText
+        ATTRIBUTES_TO_CHECK = ['WindowText']
 
         element_name = element.get('name')
         attributes = element.find('attributes', recursive=False).contents
@@ -749,6 +606,356 @@ class CheckValuesContainCustomerData(Consideration):
             return False
 
 
+class CheckValuesContainEnvironmentData(Consideration):
+
+    CONSIDERATION_NAME = "No attribute values contain Customer data?"
+
+    APPLICATION_TYPES = ['HTML', 'Java', 'Win32', 'Browser', 'Mainframe']
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 3
+    INFREQUENTLY_HURDLE = 5
+
+    def __init__(self): super().__init__()
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+            appdef = soup.find('appdef', recursive=False)
+            inherits_app_model = soup.find('parentobject', recursive=False)
+            if appdef:  # Ensure the base Object has an application model
+                if not inherits_app_model:
+                    elements = appdef.find_all('element')
+                    application_type = appdef.find('apptypeinfo', recursive=False).find('id', recursive=False).string
+                    application_type = application_type.replace('Launch', '').replace('Attach', '')
+
+                    if application_type not in self.APPLICATION_TYPES:
+                        error_str = "Unknown application type"
+                        self.errors_list.append(error_as_dict(error_str, application_type))
+                        self._force_result(Result.NO, 0)  # Can't evaluate if don't recognise application type
+                        print('Unknown application type')
+
+                    # Ignore the root element and validate all elements' attributes
+                    root_element_found = False
+                    for element in elements:
+                        element_basetype = element.find('basetype', recursive=False).string
+                        # Skip the root element
+                        if not root_element_found:
+                            if element_basetype == 'Application':
+                                root_element_found = True
+                                continue
+                        # SAP and UIA attributes can't hold sensitive information.
+                        elif 'SAP' in element_basetype or 'UIA' in element_basetype:
+                            continue
+                        elif 'HTML' in element_basetype:
+                            self._check_attributes_html(element, element_basetype)
+                        elif 'AA' in element_basetype:
+                            self._check_attributes_aa(element, element_basetype)
+                        elif 'Java' in element_basetype:
+                            self._check_attributes_java(element, element_basetype)
+                        elif 'Win' in element_basetype:
+                            self._check_attributes_windows(element, element_basetype)
+                        elif element_basetype.lower() in Settings.WIN32_ELEMENT_TYPES:
+                            self._check_attributes_windows(element, element_basetype)
+                        else:
+                            print(element_basetype + " is a basetype we haven't seen")  # Mainframe apps will fall out
+
+                # Object doesn't have it's own App Model to search (inherits)
+                else:
+                    self._consideration_not_applicable()
+            else:
+                error_str = "Base Object that does not have an App Model nor does it inherit one."
+                self.errors_list.append(error_as_dict(error_str, ""))
+
+        # Object is a wrapper
+        else:
+            self._consideration_not_applicable()
+
+    def _check_attributes_windows(self, element: Tag, element_basetype):
+        ATTRIBUTES_TO_CHECK = ['AncestorsText', 'pWindowText', 'WindowText']
+
+        element_name = element.get('name')
+        attributes = element.find('attributes', recursive=False).contents
+        attributes_check_list = self._get_checkable_attrs(attributes, ATTRIBUTES_TO_CHECK)
+
+        for attribute in attributes_check_list:
+            attribute_name = attribute.get('name')
+            attribute_value = attribute.find('processvalue', recursive=False).get('value')
+            # Ignore any basic/empty values
+            if self._useless_value(attribute_value):
+                return
+
+            if attribute_value:
+                if self._potential_env_data(attribute_value):
+                    error_str = "Windows attribute value contains potential environment specific data\nElement: '{}'\n"\
+                                "Basetype: '{}'\nAttribute: '{}'\nValue: '{}'\n"\
+                        .format(element_name, element_basetype, attribute_name, attribute_value.strip())
+                    self.errors_list.append(error_as_dict(error_str, ""))
+
+    def _check_attributes_html(self, element: Tag, element_basetype):
+        ATTRIBUTES_TO_CHECK = ['pURL']
+
+        element_name = element.get('name')
+        attributes = element.find('attributes', recursive=False)
+
+        attributes = attributes.contents
+        attributes_check_list = self._get_checkable_attrs(attributes, ATTRIBUTES_TO_CHECK)
+
+        for attribute in attributes_check_list:
+            attribute_name = attribute.get('name')
+            attribute_value = attribute.find('processvalue', recursive=False).get('value')
+            # Ignore any basic/empty values
+            if self._useless_value(attribute_value):
+                return
+
+            if attribute_value:
+                if self._potential_env_data(attribute_value):
+                    error_str = "HTML attribute value contains potential environment specific data\nElement: '{}'\n" \
+                                "Basetype: '{}'\nAttribute: '{}'\nValue: '{}'\n"\
+                        .format(element_name, element_basetype, attribute_name, attribute_value.strip())
+                    self.errors_list.append(error_as_dict(error_str, ""))
+                    print(error_str)
+
+    def _check_attributes_aa(self, element: Tag, element_basetype):
+        ATTRIBUTES_TO_CHECK = ['Name', 'pName', 'WindowText', 'AncestorText']
+
+        element_name = element.get('name')
+        attributes = element.find('attributes', recursive=False)
+
+        attributes = attributes.contents
+        attributes_check_list = self._get_checkable_attrs(attributes, ATTRIBUTES_TO_CHECK)
+
+        for attribute in attributes_check_list:
+            attribute_name = attribute.get('name')
+            attribute_value = attribute.find('processvalue', recursive=False).get('value')
+            # Ignore any basic/empty values
+            if self._useless_value(attribute_value):
+                return
+            # Ignore if value is empty
+            if attribute_value:
+                if self._potential_env_data(attribute_value):
+                    error_str = "AA attribute value contains potential customer data\nElement: '{}'\n" \
+                                "Basetype: '{}'\nAttribute: '{}'\nValue: '{}'\n"\
+                        .format(element_name, element_basetype, attribute_name, attribute_value.strip())
+                    self.errors_list.append(error_as_dict(error_str, ""))
+                    print(error_str)
+                else:
+                    ...
+                    # warning_str = "AA attribute value check\nElement: '{}'\nBasetype: '{}'" \
+                    #               "\nAttribute: '{}'\nValue: '{}'\n" \
+                    #     .format(element_name, element_basetype, attribute_name, attribute_value.strip())
+                    # self.warning_list.append(warning_as_dict(warning_str, ""))
+                    # print(warning_str)
+
+    def _check_attributes_java(self, element: Tag, element_basetype):
+        ATTRIBUTES_TO_CHECK = ['Name', 'Description', 'JavaText']
+
+        element_name = element.get('name')
+        attributes = element.find('attributes', recursive=False)
+        attributes = attributes.contents
+        attributes_check_list = self._get_checkable_attrs(attributes, ATTRIBUTES_TO_CHECK)
+
+        for attribute in attributes_check_list:
+            attribute_name = attribute.get('name')
+            attribute_value = attribute.find('processvalue', recursive=False).get('value')
+            # Ignore any basic/empty values
+            if self._useless_value(attribute_value):
+                return
+
+            if attribute_value:
+                if self._potential_env_data(attribute_value):
+                    error_str = "Java attribute value contains potential environment specific data\nElement: '{}'\n" \
+                                "Basetype: '{}'\nAttribute: '{}'\nValue: '{}'\n"\
+                        .format(element_name, element_basetype, attribute_name, attribute_value.strip())
+                    self.errors_list.append(error_as_dict(error_str, ""))
+                    print(error_str)
+
+    @staticmethod
+    def _get_checkable_attrs(attributes, ATTRIBUTES_TO_CHECK):
+        """Find all attributes that are worth checking for customer data.
+
+        Returns only attributes in the list of specific attributes to check, which are being used to find a Match.
+        """
+        attributes_check_list = []
+        for attribute in attributes:
+            if attribute.get('inuse'):
+                if attribute.get('comparisontype') != 'dynamic' and attribute.get('comparisontype') != 'd':
+                    if attribute.get('name') in ATTRIBUTES_TO_CHECK:
+                        attributes_check_list.append(attribute)
+
+        return attributes_check_list
+
+    @staticmethod
+    def _useless_value(attribute_value):
+        """Determine if the attribute value is empty or contains no useful information."""
+        attribute_value_stripped = ''.join(char for char in attribute_value if char not in '(){}<>,./ ')
+        # Don't care about single characters
+        if len(attribute_value_stripped) <= 1:
+            return True
+        # Value equal to number 0
+        try:
+            if float(attribute_value_stripped) == 0:
+                return True
+        except ValueError:
+            pass
+        # Check if value is just a date
+        try:
+            dateparse(attribute_value)
+            return True
+        except ValueError:
+            pass
+
+    @staticmethod
+    def _potential_env_data(attribute_value):
+        """Determine if a key warning word is in the value of the attribute which may indicate environment data."""
+        WARNING_WORDS = ['dev', 'test', 'uat', 'prod', 'staging', 'sandbox', 'env']
+        attribute_value = attribute_value.lower()
+        # Find if attribute contains word in the warning word list
+        if any(error_word in attribute_value for error_word in WARNING_WORDS):
+                return True
+
+
+class CheckTechnologySpecificAttributes(Consideration):
+
+    CONSIDERATION_NAME = "All technology specific attributes have been checked / unchecked?"
+
+    APPLICATION_TYPES = ['HTML', 'Java', 'Win32', 'Browser', 'Mainframe']
+    ELEMENT_TYPE_WHITELIST = ['box', 'button', 'label', 'field', 'link', 'text', 'tab', 'main', 'title', 'window',
+                              'region', 'list', 'popup', 'input', 'header', 'section', 'table', 'element',
+                              'edit', 'toolbar']
+    # Settings
+    PASS_HURDLE = 0
+    FREQUENTLY_HURDLE = 3
+    INFREQUENTLY_HURDLE = 5
+
+    def __init__(self): super().__init__()
+
+    def check_consideration(self, soup: BeautifulSoup, metadata):
+        win32_attrs_disabled = ['X', 'Y', 'Width', 'Height', 'ScreenBounds', 'pCtrlID', 'pHeight', 'pWidth', 'pX', 'pY']
+        html_attrs_disabled = ['X', 'Y', 'Width', 'Height', 'ScreenBounds', 'pURL', 'Link']
+        java_attrs_disabled = ['X', 'Y', 'Width', 'Height', 'ScreenBounds']
+        uia_attrs_disabled = ['uX', 'uY', 'uWidth', 'uHeight', 'uProcessId']
+        aa_attrs_disabled = ['paHeight', 'paWidth', 'paY', 'paX', 'ScreenBounds', 'aHeight', 'aWidth', 'aY', 'aX',
+                             'pHeight', 'pWidth', 'pY', 'pX', 'pCtrlID', 'Height', 'Width', 'Y', 'X', 'CtrlID']
+
+        java_attrs_enabled = ['MatchIndex', 'AncestorCount', 'Showing']
+        aa_attrs_enabled = ['MatchIndex', 'Invisible']
+        # Note: Doesnt do surface automation regions or region-containers
+
+        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+            appdef = soup.find('appdef', recursive=False)
+            inherits_app_model = soup.find('parentobject', recursive=False)
+
+            if appdef:  # Ensure the base Object has an application model
+                if not inherits_app_model:
+                    elements = appdef.find_all('element')
+                    application_type = appdef.find('apptypeinfo', recursive=False).find('id', recursive=False).string
+                    application_type = application_type.replace('Launch', '').replace('Attach', '')
+
+                    if application_type not in self.APPLICATION_TYPES:
+                        error_str = "Unknown application type"
+                        self.errors_list.append(error_as_dict(error_str, application_type))
+                        self._force_result(Result.NO, 0)  # Can't evaluate if don't recognise application type
+
+                    # Check Java App Model settings are correct
+                    if application_type == 'Java':
+                        app_parameters = appdef.find('apptypeinfo', recursive=False).parameters.contents
+                        for app_parameter in app_parameters:
+                            if app_parameter.name == 'ProcessMode':
+                                if not (app_parameter.value == 'Ext64bit' or app_parameter.value == 'Ext32bit'):
+                                    error_str = "Application Manager mode is not set to External 32/64 bit as " \
+                                                "recommended when using the JAB."
+                                    self.errors_list.append(error_as_dict(error_str, ""))
+                            if app_parameter.name == 'CommandLineParams':
+                                if 'ignorenotshowing' not in app_parameter.value:
+                                    warning_str = "Recommend to use 'ignorenotshowing' command line param to ignore" \
+                                                  "hidden elements and so increase search performance."
+                                    self.warning_list.append(warning_as_dict(warning_str, ""))
+
+                    # Ignore the root element and validate all elements' attributes
+                    root_element_found = False
+                    for element in elements:
+                        element_basetype = element.find('basetype', recursive=False).string
+                        if not root_element_found:
+                            if element_basetype == 'Application':
+                                root_element_found = True
+                                continue
+
+                        elif 'SAP' in element_basetype:
+                            # Can't check SAP as there are only two attributes.
+                            continue
+                        if 'Win' in element_basetype:
+                            self._check_element_attributes(element, element_basetype, win32_attrs_disabled)
+                        elif 'HTML' in element_basetype:
+                            self._check_element_attributes(element, element_basetype, html_attrs_disabled)
+                        elif 'AA' in element_basetype:
+                            self._check_element_attributes(element, element_basetype, aa_attrs_disabled,
+                                                           aa_attrs_enabled)
+                        elif 'UIA' in element_basetype:
+                            self._check_element_attributes(element, element_basetype, uia_attrs_disabled)
+                        elif 'Java' in element_basetype:
+                            self._check_element_attributes(element, element_basetype, java_attrs_disabled,
+                                                           java_attrs_enabled)
+
+                        else:
+                            if element_basetype.lower() in Settings.WIN32_ELEMENT_TYPES:
+                                self._check_element_attributes(element, element_basetype, win32_attrs_disabled)
+                            else:
+                                print(element_basetype + " is a basetype we haven't seen")
+
+                # Object doesn't have it's own App Model to search (inherits)
+                else:
+                    self._consideration_not_applicable()
+            else:
+                error_str = "Base Object that does not have an App Model nor does it inherit one."
+                self.errors_list.append(error_as_dict(error_str, ""))
+
+        # Object is a wrapper
+        else:
+            self._consideration_not_applicable()
+
+    def _check_element_attributes(self, element: Tag, element_basetype, attrs_disabled=None, attrs_enabled=None):
+        element_name = element.get('name')
+        # Find all attributes that are used to Match for this element
+        attributes_in_use = []
+        attributes = element.find('attributes', recursive=False).contents
+        for attribute in attributes:
+            if attribute.get('inuse'):
+                attributes_in_use.append(attribute)
+
+        attrs_not_disabled = []
+        # Loop through all attributes that should or shouldn't be enabled
+        # and add them ot a list
+        for attribute_used in attributes_in_use:
+            attr_name = attribute_used.get('name')
+            if attrs_disabled:
+                if attr_name in attrs_disabled:
+                    if not attribute_used.get('comparisontype'):  # Attribute is dynamic / wildcard
+                        # Don't add an error if Link or ParentURL are selected but have empty values
+                        if attr_name == 'Link' or attr_name == 'pURL':
+                            if attribute_used.contents[0].get('value'):
+                                attrs_not_disabled.append(attr_name)
+                        else:
+                            attrs_not_disabled.append(attr_name)
+            if attrs_enabled:
+                if attr_name in attrs_enabled:
+                    attrs_enabled.remove(attr_name)  # Remove them if selected and so list only contains what's left
+
+        # Gets all attributes that should be disabled and lists them in the error
+        if attrs_not_disabled:
+            attrs_not_disabled_str = str(attrs_not_disabled).replace('[', '').replace(']', '')
+            error_str = "Attribute(s) should not be used for element type '{}'\nAttributes: " \
+                .format(element_basetype)
+            error_str += attrs_not_disabled_str
+            self.errors_list.append(error_as_dict(error_str, element_name))
+
+        # Triggered if enabled list has not been cleared by finding all attrs being used.
+        if attrs_enabled:
+            attrs_enabled_str = str(attrs_enabled).replace('[', '').replace(']', '')
+            warning_str = "Attribute(s) are recommended to be be used for element type '{}'.\nAttributes: "\
+                .format(element_basetype)
+            warning_str += attrs_enabled_str
+            self.warning_list.append(warning_as_dict(warning_str, element_name))
+
 # Topic: Documentation
 class CheckActionsDocumentation(Consideration):
     """Pre/Post conditions are only required for Base Objects.
@@ -886,11 +1093,11 @@ class CheckObjHasAttach(Consideration):
 
         # Consideration not applicable to wrappers
         else:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
 
 class CheckActionsUseAttach(Consideration):
-    CONSIDERATION_NAME = "Do all Actions use the Attach action?"
+    CONSIDERATION_NAME = "Do all Actions start with an Attach page reference?"
     # Settings
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 2
@@ -921,7 +1128,7 @@ class CheckActionsUseAttach(Consideration):
 
         # Consideration not applicable to wrappers
         else:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
     @staticmethod
     def _action_begins_attach(action_page, start_stages, page_reference_stages):
@@ -942,8 +1149,7 @@ class CheckActionsUseAttach(Consideration):
 
 # Topic: Correct use of Wait Stages
 class CheckActionStartWait(Consideration):
-    CONSIDERATION_NAME = "Does each Action start with a Wait Stage to verify " \
-                         "the application is in the correct state?"
+    CONSIDERATION_NAME = "Does each Action start with a Wait stage to verify the application is in the correct state?"
     # Settings
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 1
@@ -998,15 +1204,15 @@ class CheckActionStartWait(Consideration):
 
         # Consideration not applicable to wrappers
         else:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
 
 class CheckGlobalTimeoutUsedWaits(Consideration):
     """Checks that Global timeout data items exist on the Initialise page and ensure that they are used for
     all Wait stages within the Object.
     """
-    CONSIDERATION_NAME = "Global variable enable a quick change to timeout values when application " \
-                         "behaviour dictates."
+    CONSIDERATION_NAME = "Do Global Data items enable a quick change to timeout values when " \
+                         "application behaviour dictates?"
 
     # Settings
     PASS_HURDLE = 0
@@ -1044,8 +1250,8 @@ class CheckGlobalTimeoutUsedWaits(Consideration):
 
 
 class CheckWaitNotArbitrary(Consideration):
-    CONSIDERATION_NAME = "Do Wait Stages have conditions (i.e. not arbitrary)? " \
-                         "Do not include Arbitrary Waits if used for Surface Automation purposes only?"
+    CONSIDERATION_NAME = "Do Wait stages have conditions (i.e. not arbitrary)? " \
+                         "Do not include arbitrary Waits if used for Surface Automation purposes only."
     # Settings
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 1
@@ -1061,7 +1267,7 @@ class CheckWaitNotArbitrary(Consideration):
         # TODO: Make sure an exception is made for Java automaiton, where arbitrary waits are acceptable
         # Don't check wait stages if Surface Automation used
         if metadata['additional info']['Surface Automation Used?'] == 'TRUE':
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
             return
 
         if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
@@ -1078,15 +1284,15 @@ class CheckWaitNotArbitrary(Consideration):
 
             # Consideration not applicable if no wait stages
             else:
-                self._force_result(Result.NOT_APPLICABLE, 0, 0)
+                self._consideration_not_applicable()
 
         # Consideration not applicable to wrappers
         else:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
 
 class CheckNavigateFollowedByWait(Consideration):
-    CONSIDERATION_NAME = "Are navigation stages between application screens followed by a Wait stage to verify success?"
+    CONSIDERATION_NAME = "Are Navigation stages between application screens followed by a Wait stage to verify success?"
     # Settings
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 3
@@ -1139,10 +1345,10 @@ class CheckNavigateFollowedByWait(Consideration):
                         self.errors_list.append(error_as_dict(error_str, action_name))
             # Consideration not applicable if no navigate stages
             else:
-                self._force_result(Result.NOT_APPLICABLE, 0, 0)
+                self._consideration_not_applicable()
         # Consideration not applicable to wrappers or Surface Auto bases
         else:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
     def _check_element_is_selectable(self, navigate_stage, action_name, soup):
         """Check each step in a Navigate stage to see if any application elements are selectable."""
@@ -1184,7 +1390,7 @@ class CheckWaitTimeoutToException(Consideration):
     If a Wait stage times out to an Anchor stage, it will keep following the successive anchors until it reaches
     a non-anchor stage.
     """
-    CONSIDERATION_NAME = "Do Wait Stages timeout to an exception?"
+    CONSIDERATION_NAME = "Do Wait stages timeout to an exception?"
     # Settings
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 3
@@ -1259,12 +1465,12 @@ class CheckWaitTimeoutToException(Consideration):
 
         # Consideration not applicable to wrappers
         else:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
 
 # Topic: Re-usable Actions
 class CheckActionsReusable(Consideration):
-        CONSIDERATION_NAME = "Are the actions re-useable?"
+        CONSIDERATION_NAME = "Are the Actions re-useable?"
         # Settings
         PASS_HURDLE = 0
         FREQUENTLY_HURDLE = 2
@@ -1358,7 +1564,7 @@ class CheckActionsReusable(Consideration):
 
 
 class CheckObjectsNoBusinessLogic(Consideration):
-    CONSIDERATION_NAME = "Is there no Business Logic that should be in a Process?"
+    CONSIDERATION_NAME = "Is there no Business Logic in any Actions that should be at the Process level?"
     # Settings
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 4
@@ -1555,7 +1761,7 @@ class CheckNoActionCalledInAction(Consideration):
 
         # Consideration not applicable to wrappers
         if metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
         if action_stages:
             # Goes through all found Action stages and gets their subsheetid location
@@ -1571,7 +1777,7 @@ class CheckNoActionCalledInAction(Consideration):
                     else:
                         # If its a Wrapper or Surface Automation Base, consideration is not applicable
                         # and flag any Sleep actions as warnings
-                        self._force_result(Result.NOT_APPLICABLE, 0, 0)
+                        self._consideration_not_applicable()
                         if action_stage.resource.get('action') == 'Sleep':
                             error_str = "Sleep Action '{}' called in Object".format(action_stage.get('name'))
                             self.warning_list.append(warning_as_dict(error_str, action_name))
@@ -1771,7 +1977,7 @@ class CheckObjectsNotRecoverExceptions(Consideration):
 
         if metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
             # Consideration scoring not applicable to wrappers
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
 
 # Topic: Logging
@@ -1866,7 +2072,7 @@ class CheckLoggingAdhereToPolicy(Consideration):
 
         # Consideration not applicable when in Dev or Testing
         else:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
     def _get_stage_logging(self, stage):
         """Return the logging status of the current stage."""
@@ -1942,7 +2148,7 @@ class CheckImageDefinitionsEfficient(Consideration):
                         self.errors_list.append(error_as_dict(warning_str, action_name))
 
         if not image_found:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
 
 
 # Topic: Application Focus
@@ -2029,4 +2235,4 @@ class CheckFocusUsedForGlobals(Consideration):
                 self.errors_list.append(error_as_dict(error_str, action_name))
 
         if not global_stage_found:
-            self._force_result(Result.NOT_APPLICABLE, 0, 0)
+            self._consideration_not_applicable()
