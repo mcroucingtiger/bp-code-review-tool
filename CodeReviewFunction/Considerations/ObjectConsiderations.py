@@ -97,9 +97,9 @@ class CheckElementsLogicallyBrokenDown(Consideration):
                 elements = appdef.find_all('element')
                 element_count = len(elements)
                 if element_count >= Settings.MAX_ELEMENT_COUNT:
-                    error_str = "Object has over {} spied elements ({}). Object size is probably too large" \
+                    error_str = "Object has over {} spied elements ({}). This indicates the Object is too large." \
                         .format(Settings.MAX_ELEMENT_COUNT, element_count)
-                    self.warning_list.append(error_as_dict(error_str, ''))
+                    self.errors_list.append(error_as_dict(error_str, ''))
                     print(error_str)
                 elif element_count >= Settings.WARNING_ELEMENT_COUNT:
                     warning_str = "Object has over {} spied elements ({}). Check if Object is adequately granular"\

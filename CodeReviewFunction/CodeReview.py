@@ -66,7 +66,7 @@ def test_with_local():
     # Releases with Header
     release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                     "/Testing/SAM Processed XML/LAMP.xml"
-    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+    release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                     "/Testing/SAM Processed XML/MERS.xml"
     release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                     "/Testing/SAM Processed XML/MI Report.xml"
@@ -74,7 +74,7 @@ def test_with_local():
                    "/Testing/SAM Processed XML/Multi-Process.xml"
     release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                    "/Testing/SAM Processed XML/SDO Surface Auto.xml"
-    release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+    release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                    "/Testing/SAM Processed XML/Fiserv Current.xml"
 
 
@@ -83,25 +83,23 @@ def test_with_local():
 
     if xml_string:
         # Parse the XML into multiple BeautifulSoup Objects
-        pickled_results = SoupUtilities.extract_pickled_soups(xml_string)
-        sub_soups = deserialize_to_soup(pickled_results)
+        sub_soups = SoupUtilities.extract_pickled_soups(xml_string)
 
         # --- Delete after testing
-        try:
-            metadata = extract_metadata(sub_soups.metadata)
-            active_object_consideration_classes, active_process_consideration_classes\
-                = get_active_considerations(metadata)
-        except:
-            print("!!! Unable to find the header in the XML !!!")  # Only for testing
+        # try:
+        metadata = extract_metadata(sub_soups.metadata)
+        active_object_consid_classes, active_process_consid_classes = get_active_considerations(metadata)
+        # except:
+        print("!!! Unable to find the header in the XML !!!")  # Only for testing
 
         # print(sub_soups.objects.prettify())
         start_processing = time.clock()
         for object_tag in sub_soups.objects:
-            report_page_dict = make_report_object(object_tag, active_object_consideration_classes, metadata)
+            report_page_dict = make_report_object(object_tag, active_object_consid_classes, metadata)
             report_pages.append(report_page_dict)
 
         for process_tag in sub_soups.processes:
-            report_page_dict = make_report_process(process_tag, active_process_consideration_classes, metadata)
+            report_page_dict = make_report_process(process_tag, active_process_consid_classes, metadata)
             report_pages.append(report_page_dict)
 
         report_page_dict = make_report_settings_page(metadata)

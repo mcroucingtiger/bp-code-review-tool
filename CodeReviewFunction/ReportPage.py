@@ -2,15 +2,6 @@ from bs4 import BeautifulSoup
 import logging
 
 
-class Result:
-    """Result is a column in both the Object and Process report pages."""
-    NO = 'No'
-    YES = 'Yes'
-    FREQUENTLY = 'Frequently'
-    INFREQUENTLY = 'Infrequently'
-    NOT_APPLICABLE = 'Not Applicable'
-
-
 class ReportPage:
     """"Class to manage information within a report page.
 
@@ -93,4 +84,13 @@ def error_as_dict(error_name, error_location) -> dict:
 def warning_as_dict(warning_name, warning_location) -> dict:
     """Create an warning dict of {Warning Name: ..., Warning Location: ...}."""
     return {'Warning Name': warning_name, 'Warning Location': warning_location}
+
+
+class Result:
+    """Result is a column in both the Object and Process report pages."""
+    NO = 'No'
+    YES = 'Yes'
+    FREQUENTLY = 'Frequently'
+    INFREQUENTLY = 'Infrequently'
+    NOT_APPLICABLE = 'Not Applicable'
 

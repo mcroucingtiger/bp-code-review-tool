@@ -3,6 +3,9 @@ import time
 from multiprocessing import Pool
 from bs4 import BeautifulSoup, SoupStrainer
 from . import Settings
+from collections import namedtuple
+Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues, metadata')
+
 
 def extract_pickled_soups(xml_string) -> list:
     """Turn the xml into a list of pickled soups containing processes, objects, queues and the metadata.
@@ -11,19 +14,25 @@ def extract_pickled_soups(xml_string) -> list:
     To send data to/from pool processes, objects must be pickled. bs4 objects cannot be pickled, so process return the
     bs4 objects as pickled versions of the string form of bs4 soup objects.
     """
-    pool = Pool(4)
-    strainers = ['process', 'object', 'work-queue', 'header']
-    soup_data = [(strainer, xml_string) for strainer in strainers]  # pool.starmap requires an iterable of tuples
-    print("Multi-processing xml")
+    print("NON - Multi-processing xml")
     start = time.clock()
-    results = pool.starmap(extract_soup_from_xml, soup_data)
-    pool.close()
-    pool.join()
-    end = time.clock()
-    print('Time to multi-process xml: ' + str(end - start))
+    results = []
+    strainers = ['process', 'object', 'work-queue', 'header']
+    for strainer in strainers:
+        results.append(extract_soup_from_xml(strainer, xml_string))
 
-    #pickle_results_list(results)
-    return results
+    # pool = Pool(4)
+    # strainers = ['process', 'object', 'work-queue', 'header']
+    # soup_data = [(strainer, xml_string) for strainer in strainers]  # pool.starmap requires an iterable of tuples
+
+    # results = pool.starmap(extract_soup_from_xml, soup_data)
+    # pool.close()
+    # pool.join()
+    end = time.clock()
+    print('Time to NON - multi-process xml: ' + str(end - start))
+    return Sub_Soup(results[0], results[1], results[2], results[3])
+    # dump_pickled_results(results)
+
 
 
 def extract_soup_from_xml(strainer_param, xml_string):
@@ -35,22 +44,20 @@ def extract_soup_from_xml(strainer_param, xml_string):
     if strainer_param == 'header':
         soup_strainer = SoupStrainer(strainer_param)
         individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
-        individual_soup_str = str(individual_soup)
 
     elif strainer_param == 'process' or strainer_param == 'work-queue':
         soup_strainer = SoupStrainer(strainer_param, xmlns=True)
         individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
-        individual_soup_str = str(individual_soup)
+
     elif strainer_param == 'object':
         soup_strainer = SoupStrainer('process', {"type": "object"})
         individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
-        individual_soup_str = str(individual_soup)
 
-    return individual_soup_str
+    return individual_soup
 
 
 # TODO: These two below should probably be in CodeReview
-def pickle_results_list(results):
+def dump_pickled_results(results):
     """Pickle the results list and save to a file to skip this step when testing"""
     file_location = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                     "/Testing/Fixtures/SDO_pickled_soups.txt"
