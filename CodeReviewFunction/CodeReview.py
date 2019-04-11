@@ -28,9 +28,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         logging.error("Unable to access request body")
         pass
 
+
     # Use the extracted XML to create the report
     if xml_string:
-        sub_soups = SoupUtilities.extract_pickled_soups(xml_string)  # Parse the XML into multiple BeautifulSoup Objects
+        sub_soups = SoupUtilities.extract_soups(xml_string)  # Parse the XML into multiple BeautifulSoup Objects
         metadata = extract_metadata(sub_soups.metadata)
         object_considerations, process_considerations = get_active_considerations(metadata)
 
@@ -81,7 +82,7 @@ def test_with_local():
 
     if xml_string:
         # Parse the XML into multiple BeautifulSoup Objects
-        sub_soups = SoupUtilities.extract_pickled_soups(xml_string)
+        sub_soups = SoupUtilities.extract_soups(xml_string)
 
         # --- Delete after testing
         # try:
@@ -124,7 +125,7 @@ def get_local_xml(path):
 
 
 # -- Helper functions --
-
+# TODO: Dont think this is used anymore
 def deserialize_to_soup(results):
     """Convert the pickled strings into bs4 soup objects and returns it as a named tuple of type Sub_Soup."""
     start = time.clock()
@@ -143,7 +144,11 @@ def deserialize_to_soup(results):
 
 
 def extract_metadata(soup_metadata: BeautifulSoup):
-    """Take in the metadata XML and outputs a dict of the information."""
+    """Take in the metadata XML and outputs a dict of the information.
+
+    :param soup_metadata: (BeautifulSoup) Soup containing all the metadata from the XML.
+    :return: (dict) Metadata in key/value form.
+    """
     metadata = {}
 
     # Get each JSON string from the header tag in the XML and parses the JSON string into a python data type.
@@ -230,8 +235,15 @@ def make_report_process(soup_process, active_process_considerations_classes, met
     return report_page.get_page_as_dict()
 
 
-def make_report_object(soup_object, active_object_consideration_classes, metadata):
-    """Create a single object page in the report using the filtered soup of a single object tag element."""
+def make_report_object(soup_object, active_object_consideration_classes, metadata: dict):
+    """Create a single object page in the report using the filtered soup of a single object's tag element.
+
+    :param soup_object: (BeautifulSoup) Soup of the BP Object.
+    :param active_object_consideration_classes: (list) List of an object for each class. Each object can be used to
+    instantiate a new consideration.
+    :param metadata: (dict) Metadata about the report creation.
+    :return: (dict) Full report page information as a dict.
+    """
 
     # Collect BP Information from Soup
     current_object_name = soup_object.get('name')
@@ -278,8 +290,8 @@ def make_report_settings_page(metadata):
     These settings are used by the BP SAM Process to determine what should and should not be in the final report.
     This page will not be included in the output report.
 
-    :param metadata: Metadata information from the XML.
-    :return (dict): A single settings report page as a dict.
+    :param metadata: (dict) Metadata information from the XML.
+    :return: (dict) A single settings report page as a dict.
     """
     report_page = ReportPage('Settings Page', 'Settings')
     logging.info("Running make_report_object function for Settings")

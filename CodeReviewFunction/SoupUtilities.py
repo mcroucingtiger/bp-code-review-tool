@@ -6,15 +6,14 @@ out of individual soup objects.
 
 import pickle
 import time
-from multiprocessing import Pool
 from bs4 import BeautifulSoup, SoupStrainer
 from . import Settings
 from collections import namedtuple
 Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues, metadata')
 
 
-def extract_pickled_soups(xml_string) -> namedtuple:
-    """Turn the xml into a list of pickled soups containing processes, objects, queues and the metadata.
+def extract_soups(xml_string) -> namedtuple:
+    """Turn the xml into a tuple of soups containing processes, objects, queues and the metadata.
 
     :param xml_string: The full xml from the HTTP request.
     :return: Sub_Soup object containing a individual soup for each section of the BP release.
@@ -25,14 +24,14 @@ def extract_pickled_soups(xml_string) -> namedtuple:
     results = []
     strainers = ['process', 'object', 'work-queue', 'header']
     for strainer in strainers:
-        results.append(_extract_soup_from_xml(strainer, xml_string))
+        results.append(_extract_single_soup(strainer, xml_string))
     end = time.clock()
     print('Time to extract without multi-processing all xmls: ' + str(end - start))
 
     return Sub_Soup(results[0], results[1], results[2], results[3])
 
 
-def _extract_soup_from_xml(strainer_param, xml_string):
+def _extract_single_soup(strainer_param, xml_string):
     """Create a single soup object from the full xml_string and return it in str form."""
     if strainer_param == 'header':
         soup_strainer = SoupStrainer(strainer_param)
@@ -47,15 +46,6 @@ def _extract_soup_from_xml(strainer_param, xml_string):
         individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
 
     return individual_soup
-
-
-# TODO: These two below should probably be in CodeReview
-def dump_pickled_results(results):
-    """Pickle the results list and save to a file to skip this step when testing"""
-    file_location = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
-                    "/Testing/Fixtures/SDO_pickled_soups.txt"
-    with open(file_location, 'wb') as file:
-        pickle.dump(results, file)
 
 
 def determine_object_type(object_name, soup_object: BeautifulSoup):
@@ -144,3 +134,12 @@ def get_object_actions(object_soup: BeautifulSoup):
             object_actions.append(action.next_element.string)
 
     return object_actions
+
+
+# Only used for testing
+def pickle_and_dump(py_object):
+    """Pickle and save and object to a file to speed up testing."""
+    file_location = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+                    "/Testing/Fixtures/MI_Premium_pickled_soups.txt"
+    with open(file_location, 'wb') as file:
+        pickle.dump(py_object, file)

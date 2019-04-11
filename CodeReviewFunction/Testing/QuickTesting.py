@@ -1,20 +1,21 @@
 from bs4 import BeautifulSoup
 import time
 from ..CodeReview import get_local_xml
-from CodeReviewFunction.SoupUtilities import extract_pickled_soups
+from CodeReviewFunction.SoupUtilities import extract_soups
 from CodeReviewFunction.CodeReview import deserialize_to_soup
 from .. import SoupUtilities
 import pickle
 from ..Considerations.ObjectConsiderations import *
 from ..Considerations.ProcessConsiderations import *
+from .. import SoupUtilities
 
 
 # Main
-release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                "/Testing/SAM Processed XML/LAMP.xml"
 release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/SAM Processed XML/MERS.xml"
-release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+release_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/SAM Processed XML/MI Report.xml"
 release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/SAM Processed XML/Multi-Process.xml"
@@ -41,7 +42,7 @@ pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeRe
                 "/Testing/Fixtures/MI_Premium_pickled_soups.txt"
 pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/multi_process_pickled_soups.txt"
-pickled_path = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
+pickled_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                 "/Testing/Fixtures/SDO_pickled_soups.txt"
 
 
@@ -86,10 +87,12 @@ if __name__ == '__main__':
     print('__main__ running for UnitTesting')
     full_speed_start = time.clock()
     # --- To Use Raw XML ---
-    sub_soups = deserialize_to_soup(extract_pickled_soups(get_local_xml(release_path)))
+    sub_soups = extract_soups(get_local_xml(release_path))
     # -- To Use Pre-Pickled ---
     # pickled_results = get_local_pickled_results(pickled_path)
     # sub_soups = deserialize_to_soup(pickled_results)
+    SoupUtilities.pickle_and_dump(sub_soups)
+    
 
     print_sub_soups_contents(sub_soups)
 
@@ -114,5 +117,8 @@ if __name__ == '__main__':
 
     full_speed_end = time.clock()
     print('\nFull Process Speed: ' + str(full_speed_end - full_speed_start))
+
+
+
 
 

@@ -6,6 +6,10 @@ from ... import CodeReview
 
 class TestMain(TestCase):
 
+    # Supposedly you can create a dummy func.HttpRequest after a update in Jan, but i can't get it to work
+    # https://github.com/Azure/azure-functions-python-worker/wiki/Unit-Testing-Guide
+    #
+
     def setUp(self):
         self.req = func.HttpRequest(
                 method='GET',
