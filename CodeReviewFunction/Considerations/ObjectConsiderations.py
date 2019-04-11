@@ -11,9 +11,12 @@ from dateutil.parser import parse as dateparse
 
 
 # --- Utility functions ---
-def object_consideration_module_classes() -> list:
-    """Retrieve a tuple containing all consideration class names' in this module, and their metaclass."""
-    object_classes = []
+def get_object_consideration_module_classes() -> list:
+    """Retrieve all consideration class names' in this module, and their metaclass.
+
+    :return: (list) Each consideration class
+    """
+    class_objects = []
     clsmembers = inspect.getmembers(sys.modules[__name__], inspect.isclass)
     irrelevant_classes = ['Consideration', 'ReportPageHelper', 'Result', 'SoupStrainer', 'Sub_Soup', 'BeautifulSoup',
                           'Tag']
@@ -24,9 +27,9 @@ def object_consideration_module_classes() -> list:
             except AttributeError:
                 print(consideration_class[0] + " class does not have a consideration value")
             else:
-                object_classes.append(consideration_class)
+                class_objects.append(consideration_class)
 
-    return object_classes
+    return class_objects
 
 
 def object_not_blacklisted(blacklist, object_soup) -> bool:

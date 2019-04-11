@@ -1,3 +1,9 @@
+"""
+This module contains all functions that break down the main soup into sub-soups, and extracting basic information
+out of individual soup objects.
+
+"""
+
 import pickle
 import time
 from multiprocessing import Pool
@@ -7,40 +13,27 @@ from collections import namedtuple
 Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues, metadata')
 
 
-def extract_pickled_soups(xml_string) -> list:
+def extract_pickled_soups(xml_string) -> namedtuple:
     """Turn the xml into a list of pickled soups containing processes, objects, queues and the metadata.
 
-    Uses multiprocessing to convert the full XML into multiple pickled bs4 objects to improve pocessing speed.
-    To send data to/from pool processes, objects must be pickled. bs4 objects cannot be pickled, so process return the
-    bs4 objects as pickled versions of the string form of bs4 soup objects.
+    :param xml_string: The full xml from the HTTP request.
+    :return: Sub_Soup object containing a individual soup for each section of the BP release.
     """
-    print("NON - Multi-processing xml")
+
+    print("Extracting without multi-processing xml")
     start = time.clock()
     results = []
     strainers = ['process', 'object', 'work-queue', 'header']
     for strainer in strainers:
-        results.append(extract_soup_from_xml(strainer, xml_string))
-
-    # pool = Pool(4)
-    # strainers = ['process', 'object', 'work-queue', 'header']
-    # soup_data = [(strainer, xml_string) for strainer in strainers]  # pool.starmap requires an iterable of tuples
-
-    # results = pool.starmap(extract_soup_from_xml, soup_data)
-    # pool.close()
-    # pool.join()
+        results.append(_extract_soup_from_xml(strainer, xml_string))
     end = time.clock()
-    print('Time to NON - multi-process xml: ' + str(end - start))
+    print('Time to extract without multi-processing all xmls: ' + str(end - start))
+
     return Sub_Soup(results[0], results[1], results[2], results[3])
-    # dump_pickled_results(results)
 
 
-
-def extract_soup_from_xml(strainer_param, xml_string):
-    """Create a single soup object from the full xml_string and return it in str form.
-
-    This function is called multiple times in parallel by the multi-processing pool.starmap.
-    """
-    individual_soup_str = None
+def _extract_soup_from_xml(strainer_param, xml_string):
+    """Create a single soup object from the full xml_string and return it in str form."""
     if strainer_param == 'header':
         soup_strainer = SoupStrainer(strainer_param)
         individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
@@ -66,7 +59,8 @@ def dump_pickled_results(results):
 
 
 def determine_object_type(object_name, soup_object: BeautifulSoup):
-    """Determine if a Object is a Wrapper, Base, or Base for Surface Automation.
+    """
+    Determine if a Object is a Wrapper, Base, or Base for Surface Automation.
 
     Used so that Considerations can change their behaviour based on how the Object is laid out.
 
@@ -133,3 +127,20 @@ def determine_object_type(object_name, soup_object: BeautifulSoup):
                 # Otherwise assume not Surface Automation
                 else:
                     return Settings.OBJECT_TYPES['wrapper'], True
+
+
+def get_object_actions(object_soup: BeautifulSoup):
+    """Go through a Beautiful Soup of a single BP Object's XML and extracts all Action names
+
+    :param object_soup: BS4 Object for a single object.
+    :return (list of str): List of Actions within the BP Object.
+    """
+    object_actions = []
+
+    soup_actions = object_soup.find_all("subsheet")
+    for action in soup_actions:
+        action_name = action.next_element.string
+        if action_name != 'Clean Up':
+            object_actions.append(action.next_element.string)
+
+    return object_actions

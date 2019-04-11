@@ -1,3 +1,6 @@
+import math
+
+math.sqrt(4)
 # Object Settings
 WARNING_STAGES_PER_PAGE = 12
 """Warning point for number of stages that an Action page should have."""

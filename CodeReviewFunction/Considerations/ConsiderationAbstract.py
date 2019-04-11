@@ -10,7 +10,7 @@ class Consideration(ABC):
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 0
     INFREQUENTLY_HURDLE = 0
-    """Default values will fail if any errors found."""
+    # Default values will fail if any errors found (? what?)
 
     INFREQUENTLY_SCALE = 0.3
     FREQUENTLY_SCALE = 0.7
@@ -68,19 +68,18 @@ class Consideration(ABC):
                     self.score = self.max_score
                     self.result = Result.YES
 
-    def add_to_report(self, report_helper):
-        """Add the consideration and its errors' within the the report_helper's considerations list.
-
-        This method should not need to be overridden.
-        """
-        report_helper.set_consideration(self.CONSIDERATION_NAME, self.max_score, self.score, self.result,
-                                        self.errors_list, self.warning_list)
-
     def _consideration_not_applicable(self):
+        """Force the results for the consideration to 'Not Applicable'."""
         self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
     def _force_result(self, result, score, max_score=None):
-        """Set the result of the consideration and override scoring of errors."""
+        """ Set the result of the consideration and override scoring of errors.
+
+        :param result (str): Will be one of the Result values from Result class.
+        :param score (int): Value to be forced.
+        :param max_score (int): Optional to override max score.
+        """
+
         self.result_forced = True
         self.result = result
         self.score = score

@@ -6,7 +6,7 @@ import time
 from collections import namedtuple
 from . import SoupUtilities
 from .ReportPage import ReportPage
-from .Considerations.ObjectConsiderations import object_consideration_module_classes
+from .Considerations.ObjectConsiderations import get_object_consideration_module_classes
 from .Considerations.ProcessConsiderations import process_consideration_module_classes
 
 # logging.critical .error .warning .info .debug
@@ -77,8 +77,6 @@ def test_with_local():
     release_path_ = "C:/Users/MorganCrouch/Documents/Github/CodeReviewSAMProj/CodeReviewFunction" \
                    "/Testing/SAM Processed XML/Fiserv Current.xml"
 
-
-
     xml_string = get_local_xml(release_path)
 
     if xml_string:
@@ -124,6 +122,8 @@ def get_local_xml(path):
         xml_string = file.read()
     return xml_string
 
+
+# -- Helper functions --
 
 def deserialize_to_soup(results):
     """Convert the pickled strings into bs4 soup objects and returns it as a named tuple of type Sub_Soup."""
@@ -172,15 +172,15 @@ def extract_metadata(soup_metadata: BeautifulSoup):
 
 
 def get_active_considerations(metadata):
-    """Create lists containing consideration metaclasses for all active object and process considerations.
+    """Create lists containing consideration class' objects for all active object and process considerations.
 
     Goes through config file for all considerations marked as active. Then compares these active considerations
     to the considerations available within this script.
 
-    The object_consideration_classes and process_consideration_classes will contain a list of metaclasses
+    The object_consideration_classes and process_consideration_classes will contain a list of objects
     of the Consideration's class. Only considerations that are marked as 'Active' in the config file
-    will have their class' metaclass added to the respective active_process_consideration_classes or
-    active_object_consideration_classes list.
+    will have their class' object added to the respective active_process_consideration_classes or
+    active_object_consideration_classes list. These class objects are later iterated through and instantiated.
     """
 
     active_object_consideration_classes = []
@@ -188,7 +188,7 @@ def get_active_considerations(metadata):
 
     active_considerations_object = metadata['active considerations object']
     active_considerations_process = metadata['active considerations process']
-    object_consideration_classes = object_consideration_module_classes()
+    object_consideration_classes = get_object_consideration_module_classes()
     process_consideration_classes = process_consideration_module_classes()
 
     # Retrieve active Object Considerations
@@ -198,7 +198,7 @@ def get_active_considerations(metadata):
             for object_class in object_consideration_classes:
                 class_consideration_name = object_class[1].CONSIDERATION_NAME
                 if class_consideration_name == report_consideration_name:
-                    # Add  metaclass and add to object consideration list
+                    # Add class' object to object consideration list
                     active_object_consideration_classes.append(object_class[1])
                     break
 
@@ -210,7 +210,7 @@ def get_active_considerations(metadata):
             for process_class in process_consideration_classes:
                 class_consideration_name = process_class[1].CONSIDERATION_NAME
                 if class_consideration_name == report_consideration_name:
-                    # Adds  metaclass to process consideration list
+                    # Adds  Class' object to process consideration list
                     active_process_consideration_classes.append(process_class[1])
                     break
 
@@ -220,8 +220,8 @@ def get_active_considerations(metadata):
 # Still in dev
 def make_report_process(soup_process, active_process_considerations_classes, metadata):
     """Use the filtered soup of a single process tag element to generate the JSON for a page in the report."""
-    report_page = ReportPage()
-    report_page.set_page_header_info('Process', soup_process)
+    current_process_name = soup_process.get('name')
+    report_page = ReportPage(current_process_name, 'Process')
 
     logging.info("Running make_report_process function for " + report_page.page_name)
 
@@ -231,14 +231,20 @@ def make_report_process(soup_process, active_process_considerations_classes, met
 
 
 def make_report_object(soup_object, active_object_consideration_classes, metadata):
-    """Use the filtered soup of a single object tag element to generate the JSON for a object page in the report."""
-    report_page = ReportPage()
+    """Create a single object page in the report using the filtered soup of a single object tag element."""
 
-    current_object_name = soup_object.get('name').lower()
-    object_type, evaluated = SoupUtilities.determine_object_type(current_object_name, soup_object)
+    # Collect BP Information from Soup
+    current_object_name = soup_object.get('name')
+    object_actions = SoupUtilities.get_object_actions(soup_object)
+    object_type, evaluated = SoupUtilities.determine_object_type(current_object_name.lower(), soup_object)
+    object_type_full = ''
+    if evaluated:
+        object_type_full = object_type + " (Evaluated)"
+    else:
+        object_type_full = object_type
     metadata['object type'] = object_type
-    report_page.set_page_header_info('Object', soup_object, object_type, evaluated)
 
+    report_page = ReportPage('Object', current_object_name, object_type_full, object_actions)
     logging.info("Running make_report_object function for " + report_page.page_name)
 
     blacklist_objects = metadata['blacklist']
@@ -246,7 +252,7 @@ def make_report_object(soup_object, active_object_consideration_classes, metadat
 
     for object_consideration in active_object_consideration_classes:
         # Check the Object name isn't a blacklisted object
-        if not any(ignored_object in current_object_name for ignored_object in blacklist_objects):
+        if not any(ignored_object in current_object_name.lower() for ignored_object in blacklist_objects):
             for active_object in metadata_active_objects:
                 # Find current consideration in the active consideration info of config file
                 if active_object['Object Considerations'] == object_consideration.CONSIDERATION_NAME:
@@ -260,15 +266,22 @@ def make_report_object(soup_object, active_object_consideration_classes, metadat
                         temp_consideration.evaluate_score_and_result()
                     else:
                         temp_consideration.evaluate_score_and_result(float(score_scale), force_result)
-                    temp_consideration.add_to_report(report_page)
+
+                    report_page.set_consideration(temp_consideration)
 
     return report_page.get_page_as_dict()
 
 
 def make_report_settings_page(metadata):
-    """Add a setting report page where 'Report Considerations' are the settings to be sent to Blue Prism."""
-    report_page = ReportPage()
-    report_page.set_page_header_info('Settings', None)
+    """Add a setting report page where 'Report Considerations' are the settings to be sent to Blue Prism.
+
+    These settings are used by the BP SAM Process to determine what should and should not be in the final report.
+    This page will not be included in the output report.
+
+    :param metadata: Metadata information from the XML.
+    :return (dict): A single settings report page as a dict.
+    """
+    report_page = ReportPage('Settings Page', 'Settings')
     logging.info("Running make_report_object function for Settings")
     for setting in metadata['settings']:
         report_page.considerations.append(setting)
