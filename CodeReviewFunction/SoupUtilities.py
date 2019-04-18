@@ -7,7 +7,7 @@ out of individual soup objects.
 import pickle
 import time
 from bs4 import BeautifulSoup, SoupStrainer
-from . import Settings
+from . import Constants
 from collections import namedtuple
 Sub_Soup = namedtuple('Sub_Soup', 'processes, objects, queues, metadata')
 
@@ -32,7 +32,7 @@ def extract_soups(xml_string) -> namedtuple:
 
 
 def _extract_single_soup(strainer_param, xml_string):
-    """Create a single soup object from the full xml_string and return it in str form."""
+    """Return a single soup object from the full xml_string."""
     if strainer_param == 'header':
         soup_strainer = SoupStrainer(strainer_param)
         individual_soup = BeautifulSoup(xml_string, 'lxml', parse_only=soup_strainer)
@@ -58,6 +58,9 @@ def determine_object_type(object_name, soup_object: BeautifulSoup):
         str: Type of object as 'Wrapper', 'Surface Automation Base' or 'Base' from Settings.OBJECT_TYPES
         bool: Object type estimated. True if Object type not given in the Object's name
     """
+    # Ratio of how many Action stages to a sub-sheet (i.e. per Action page) that suggest an Object is a wrapper
+    ACTIONS_PER_PAGE_WRAPPER_RATIO = 3
+
     if 'base' in object_name:
         # Check if Object has a Read stage for 'Read Image'
         read_stages = soup_object.find_all('stage', type='Read', recursive=False)
@@ -67,13 +70,13 @@ def determine_object_type(object_name, soup_object: BeautifulSoup):
                 for step in steps:
                     step_name = step.action.id.string
                     if step_name == 'ReadBitmap':
-                        return Settings.OBJECT_TYPES['surface auto base'], False
+                        return Constants.OBJECT_TYPES['surface auto base'], False
         else:
             # Otherwise assume not Surface Automation
-            return Settings.OBJECT_TYPES['base'], False
+            return Constants.OBJECT_TYPES['base'], False
 
     elif 'wrapper' in object_name:
-        return Settings.OBJECT_TYPES['wrapper'], False
+        return Constants.OBJECT_TYPES['wrapper'], False
 
     # Object name contains neither 'Base' nor 'Wrapper'
     else:
@@ -84,23 +87,23 @@ def determine_object_type(object_name, soup_object: BeautifulSoup):
 
             # Check if the App Model only has empty elements
             if application_modeller.element.find('element') is None:
-                return Settings.OBJECT_TYPES['wrapper'], True
+                return Constants.OBJECT_TYPES['wrapper'], True
 
             # Find all the Action stages and all subsheets (Action pages) in an Object.
             # Checks to see if there are more Actions per page than the cut off ratio, suggesting it's a wrapper.
             subsheets = soup_object.find_all('subsheet', recursive=False)
             action_stages = soup_object.find_all('stage', type='Action', recursive=False)
-            if len(action_stages) >= len(subsheets) * Settings.ACTIONS_PER_PAGE_WRAPPER_RATIO:
-                return Settings.OBJECT_TYPES['wrapper'], True
+            if len(action_stages) >= len(subsheets) * ACTIONS_PER_PAGE_WRAPPER_RATIO:
+                return Constants.OBJECT_TYPES['wrapper'], True
             else:
-                return Settings.OBJECT_TYPES['base'], True
+                return Constants.OBJECT_TYPES['base'], True
 
         # No Application Model exists indicating wrapper
         else:
             # Check for if the app model is inherited from another Object
             inherits_app_model = soup_object.find('parentobject', recursive=False)
             if inherits_app_model:
-                return Settings.OBJECT_TYPES['base'], False
+                return Constants.OBJECT_TYPES['base'], False
 
             # App model not inherited so none exists
             else:
@@ -112,11 +115,11 @@ def determine_object_type(object_name, soup_object: BeautifulSoup):
                         for step in steps:
                             step_name = step.action.id.string
                             if step_name == 'ReadBitmap':
-                                return Settings.OBJECT_TYPES['surface auto base'], True
+                                return Constants.OBJECT_TYPES['surface auto base'], True
 
                 # Otherwise assume not Surface Automation
                 else:
-                    return Settings.OBJECT_TYPES['wrapper'], True
+                    return Constants.OBJECT_TYPES['wrapper'], True
 
 
 def get_object_actions(object_soup: BeautifulSoup):

@@ -92,7 +92,8 @@ if __name__ == '__main__':
     # pickled_results = get_local_pickled_results(pickled_path)
     # sub_soups = deserialize_to_soup(pickled_results)
     SoupUtilities.pickle_and_dump(sub_soups)
-    
+    "to do: dump mi report To use it for testing TestDetermine_object_type"
+
 
     print_sub_soups_contents(sub_soups)
 

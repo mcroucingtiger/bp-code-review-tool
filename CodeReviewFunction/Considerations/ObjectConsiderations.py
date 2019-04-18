@@ -6,85 +6,20 @@ import re
 import time
 from ..ReportPage import error_as_dict, warning_as_dict, Result
 from .ConsiderationAbstract import Consideration
-from .. import Settings
+from .. import Constants
 from dateutil.parser import parse as dateparse
 
-
-# --- Utility functions ---
-def get_object_consideration_module_classes() -> list:
-    """Retrieve all consideration class names' in this module, and their metaclass.
-
-    :return: (list) Each consideration class
-    """
-    class_objects = []
-    clsmembers = inspect.getmembers(sys.modules[__name__], inspect.isclass)
-    irrelevant_classes = ['Consideration', 'ReportPageHelper', 'Result', 'SoupStrainer', 'Sub_Soup', 'BeautifulSoup',
-                          'Tag']
-    for consideration_class in clsmembers:
-        if consideration_class[0] not in irrelevant_classes:
-            try:
-                consideration_class[1].CONSIDERATION_NAME
-            except AttributeError:
-                print(consideration_class[0] + " class does not have a consideration value")
-            else:
-                class_objects.append(consideration_class)
-
-    return class_objects
-
-
-def object_not_blacklisted(blacklist, object_soup) -> bool:
-    """Check object name doesn't contain a blacklisted word.
-
-    Most often this word is 'wrapper' as many rules that apply to base objects are not applicable to their wrapper
-    objects."""
-    object_name = object_soup.get('name').lower()
-    if not any(blacklist_word in object_name for blacklist_word in blacklist):
-        return True
-    else:
-        return False
-
-
-def action_not_blacklisted(blacklist, action_name)->bool:
-    """Check action name doesn't contain blacklisted words."""
-    action_name = action_name.lower()
-    if not any(blacklist_word in action_name for blacklist_word in blacklist):
-        return True
-    else:
-        return False
-
-
-def get_action_subsheets(object_soup: BeautifulSoup):
-    """Get a list of touples containing (subsheetid, subsheetname) for all Actions in the object."""
-    subsheets = object_soup.find_all('subsheet', recursive=False)
-    subsheets_info = [(subsheet.get('subsheetid'), subsheet.next_element.string) for subsheet in subsheets]
-    return subsheets_info
-
-
-def get_onsuccess_tag(stage: Tag, object_soup: BeautifulSoup) -> Tag:
-    if stage.onsuccess:
-        onsuccess = stage.onsuccess.string
-        success_stage = object_soup.find('stage', stageid=onsuccess, recursive=False)
-        return success_stage
-
-
-def subsheetid_to_action(stage_subsheetid, action_subsheets)->str:
-    """Find the containing Action's name from a stage's subsheetid.
-
-    action_subsheets will be the return value of the funtion get_action_subsheets().
-    """
-    for action_subsheet in action_subsheets:
-        action_subsheet_id = action_subsheet[0]
-        if action_subsheet_id == stage_subsheetid:
-            action_name = action_subsheet[1]
-            return action_name
-
-
-# --- Object Considerations ---
+# -------------------------------------------------- Object Considerations Classes
 # Topic: Application Modeller Tree broken down
 class CheckElementsLogicallyBrokenDown(Consideration):
     """Check App Model tree has at least two levels of descendants."""
     CONSIDERATION_NAME = "Are the elements logically broken down by screen or each part of the screen?"
     #Settings
+    MAX_ELEMENT_COUNT = 250
+    WARNING_ELEMENT_COUNT = 130
+    WARNING_ELEMENT_MINIMUM = 10  # Warning if a flat App Model is found but there are less than this many elements.
+
+
     MAX_ERROR_SCORE = 5
 
     def __init__(self): super().__init__(self.MAX_ERROR_SCORE)
@@ -93,20 +28,20 @@ class CheckElementsLogicallyBrokenDown(Consideration):
         appdef = soup.find('appdef', recursive=False)
         inherits_app_model = soup.find('parentobject', recursive=False)
 
-        if metadata['object type'] == Settings.OBJECT_TYPES['base']:
+        if metadata['object type'] == Constants.OBJECT_TYPES['base']:
             # Ensure the base Object has an application model
             if appdef:
                 # Check the number of elements in the App Model
                 elements = appdef.find_all('element')
                 element_count = len(elements)
-                if element_count >= Settings.MAX_ELEMENT_COUNT:
+                if element_count >= self.MAX_ELEMENT_COUNT:
                     error_str = "Object has over {} spied elements ({}). This indicates the Object is too large." \
-                        .format(Settings.MAX_ELEMENT_COUNT, element_count)
+                        .format(self.MAX_ELEMENT_COUNT, element_count)
                     self.errors_list.append(error_as_dict(error_str, ''))
                     print(error_str)
-                elif element_count >= Settings.WARNING_ELEMENT_COUNT:
+                elif element_count >= self.WARNING_ELEMENT_COUNT:
                     warning_str = "Object has over {} spied elements ({}). Check if Object is adequately granular"\
-                        .format(Settings.WARNING_ELEMENT_COUNT, element_count)
+                        .format(self.WARNING_ELEMENT_COUNT, element_count)
                     self.warning_list.append(warning_as_dict(warning_str, ''))
                     print(warning_str)
 
@@ -137,7 +72,7 @@ class CheckElementsLogicallyBrokenDown(Consideration):
                     # Flat App Model found
                     if element_count < 10:
                         warning_str = "Flat App Model tree found, but tree contains less than {} elements ({})"\
-                            .format(Settings.WARNING_ELEMENT_MINIMUM, element_count)
+                            .format(self.WARNING_ELEMENT_MINIMUM, element_count)
                         self.warning_list.append(warning_as_dict(warning_str, ""))
                         print(warning_str)
                     else:
@@ -149,7 +84,7 @@ class CheckElementsLogicallyBrokenDown(Consideration):
                 self.errors_list.append(error_as_dict(error_str, ""))
                 print(error_str)
 
-        elif metadata['object type'] == Settings.OBJECT_TYPES['surface auto base']:
+        elif metadata['object type'] == Constants.OBJECT_TYPES['surface auto base']:
             # Ensure the base Object has an application model
             if appdef:
                 if not inherits_app_model:
@@ -177,6 +112,8 @@ class CheckElementNamesFollowBestPractice(Consideration):
                               'region', 'list', 'popup', 'input', 'header', 'section', 'table', 'element',
                               'edit', 'toolbar']
     # Settings
+    WARNING_ELEMENT_TYPE_LENGTH = 16  # Max length of a element type before warning created.
+
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 3
     INFREQUENTLY_HURDLE = 5
@@ -185,7 +122,7 @@ class CheckElementNamesFollowBestPractice(Consideration):
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
         """Check that best practice was used when naming the App Modeller tree elements."""
-        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+        if metadata['object type'] != Constants.OBJECT_TYPES['wrapper']:
             appdef = soup.find('appdef', recursive=False)
             inherits_app_model = soup.find('parentobject', recursive=False)
             elements = appdef.find_all('element')
@@ -210,7 +147,7 @@ class CheckElementNamesFollowBestPractice(Consideration):
                         self._check_element_title(element, application_type)
 
                     # Checks specific to Surface Automation Base Objects
-                    if metadata['object type'] == Settings.OBJECT_TYPES['surface auto base']:
+                    if metadata['object type'] == Constants.OBJECT_TYPES['surface auto base']:
                         regions = appdef.find_all('region')
                         for region in regions:
                             region_name = region.get('name')
@@ -247,9 +184,6 @@ class CheckElementNamesFollowBestPractice(Consideration):
             bool: If the element conforms to best practice.  True for success, False otherwise.
 
          """
-
-
-
         element_name = element.get('name')
         element_base_type = element.find('basetype', recursive=False).string
         type_idx, name_idx = 0, 1
@@ -264,8 +198,8 @@ class CheckElementNamesFollowBestPractice(Consideration):
 
         # Check the element type within the name matches the whitelist
         if any(element_type in element_list[type_idx].lower() for element_type in self.ELEMENT_TYPE_WHITELIST):
-            if len(element_list[type_idx]) >= Settings.WARNING_ELEMENT_TYPE_LENGTH:
-                warning_str = "Element type may be excessively long".format()
+            if len(element_list[type_idx]) >= self.WARNING_ELEMENT_TYPE_LENGTH:
+                warning_str = "Element type may be excessively long"
                 self.warning_list.append(warning_as_dict(warning_str, element_list[type_idx]))
         # If element type isn't valid, flag error and strip spy mode from element type if needed
         else:
@@ -288,7 +222,7 @@ class CheckElementNamesFollowBestPractice(Consideration):
                 right_bracket_idx = str.rfind(element_list[1], ')')
 
                 # Converts Windows elements with base_type 'Button' or 'Edit' to instead be 'Win32' for consistency
-                if element_base_type.lower() in Settings.WIN32_ELEMENT_TYPES:
+                if element_base_type.lower() in Constants.WIN32_ELEMENT_TYPES:
                     element_base_type = 'Win32'
 
                 # Check if the correct spy mode was noted in the brackets e.g. (AA)
@@ -367,7 +301,7 @@ class CheckValuesContainCustomerData(Consideration):
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+        if metadata['object type'] != Constants.OBJECT_TYPES['wrapper']:
             appdef = soup.find('appdef', recursive=False)
             inherits_app_model = soup.find('parentobject', recursive=False)
             if appdef:  # Ensure the base Object has an application model
@@ -408,7 +342,7 @@ class CheckValuesContainCustomerData(Consideration):
                             if element_basetype == 'Window':
                                 continue
                             print('This path should never be hit, but this is here in case it is: ' + element_basetype)
-                        elif element_basetype.lower() in Settings.WIN32_ELEMENT_TYPES:
+                        elif element_basetype.lower() in Constants.WIN32_ELEMENT_TYPES:
                             self._check_attributes_windows(element, element_basetype)
                         else:
                             print(element_basetype + " is a basetype we haven't seen")  # Mainframe apps will fall out
@@ -622,7 +556,7 @@ class CheckValuesContainEnvironmentData(Consideration):
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+        if metadata['object type'] != Constants.OBJECT_TYPES['wrapper']:
             appdef = soup.find('appdef', recursive=False)
             inherits_app_model = soup.find('parentobject', recursive=False)
             if appdef:  # Ensure the base Object has an application model
@@ -657,7 +591,7 @@ class CheckValuesContainEnvironmentData(Consideration):
                             self._check_attributes_java(element, element_basetype)
                         elif 'Win' in element_basetype:
                             self._check_attributes_windows(element, element_basetype)
-                        elif element_basetype.lower() in Settings.WIN32_ELEMENT_TYPES:
+                        elif element_basetype.lower() in Constants.WIN32_ELEMENT_TYPES:
                             self._check_attributes_windows(element, element_basetype)
                         else:
                             print(element_basetype + " is a basetype we haven't seen")  # Mainframe apps will fall out
@@ -842,9 +776,9 @@ class CheckTechnologySpecificAttributes(Consideration):
 
         java_attrs_enabled = ['MatchIndex', 'AncestorCount', 'Showing']
         aa_attrs_enabled = ['MatchIndex', 'Invisible']
-        # Note: Doesnt do surface automation regions or region-containers
+        # Note: Doesn't do surface automation regions or region-containers
 
-        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+        if metadata['object type'] != Constants.OBJECT_TYPES['wrapper']:
             appdef = soup.find('appdef', recursive=False)
             inherits_app_model = soup.find('parentobject', recursive=False)
 
@@ -900,7 +834,7 @@ class CheckTechnologySpecificAttributes(Consideration):
                                                            java_attrs_enabled)
 
                         else:
-                            if element_basetype.lower() in Settings.WIN32_ELEMENT_TYPES:
+                            if element_basetype.lower() in Constants.WIN32_ELEMENT_TYPES:
                                 self._check_element_attributes(element, element_basetype, win32_attrs_disabled)
                             else:
                                 print(element_basetype + " is a basetype we haven't seen")
@@ -988,7 +922,7 @@ class CheckActionsDocumentation(Consideration):
             if action_description is None:
                 # Match the description stage with the Actions name and record the error
                 action_name = subsheet_info_stage.get('name')
-                if action_not_blacklisted(BLACKLIST_ACTION_NAMES, action_name):
+                if check_not_blacklisted(BLACKLIST_ACTION_NAMES, action_name):
                     self.errors_list.append(error_as_dict("Missing Action Description", action_name))
 
         # Find input and output param descriptions
@@ -1018,7 +952,7 @@ class CheckActionsDocumentation(Consideration):
         for start_stage in start_stages:
             if start_stage.subsheetid:  # Initialize's Start doesn't have subsheetid
                 action_name = subsheetid_to_action(start_stage.subsheetid.string, action_subsheets)
-                if action_not_blacklisted(BLACKLIST_ACTION_NAMES, action_name):
+                if check_not_blacklisted(BLACKLIST_ACTION_NAMES, action_name):
                     conditions_documented = True
                     error_str = ""
                     if start_stage.preconditions is None:
@@ -1035,10 +969,10 @@ class CheckActionsDocumentation(Consideration):
                     if not conditions_documented:
                         # If the Object is a Wrapper, flag a warning. If it's a Base Object, flag as an error.
                         # Base Surface Automation Objects don't require a pre/post condition due to their nature.
-                        if metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
+                        if metadata['object type'] == Constants.OBJECT_TYPES['wrapper']:
                             error_str += ' in Wrapper'
                             self.warning_list.append(warning_as_dict(error_str, action_name))
-                        elif metadata['object type'] == Settings.OBJECT_TYPES['base']:
+                        elif metadata['object type'] == Constants.OBJECT_TYPES['base']:
                             self.errors_list.append(error_as_dict(error_str, action_name))
 
 
@@ -1082,7 +1016,7 @@ class CheckObjHasAttach(Consideration):
     def check_consideration(self, soup: BeautifulSoup, metadata):
         """Go through an object and ensure at least one page contains the word 'Attach'."""
         # Wrapper Objects do not require an Attach
-        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+        if metadata['object type'] != Constants.OBJECT_TYPES['wrapper']:
             attach_found = False
             subsheets = soup.find_all('subsheet', recursive=False)  # Find all page names
             for subsheet in subsheets:
@@ -1121,10 +1055,10 @@ class CheckActionsUseAttach(Consideration):
         # Wrapper Actions do not require an Attach as the first stage.
         # Check the Action does not contain a word from the blacklist and ensure the first stage is a Attach.
         # TODO: check this works. 'metadata' got deleted and there were not flags for errors...
-        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+        if metadata['object type'] != Constants.OBJECT_TYPES['wrapper']:
             for action_page in action_pages:
                 action_name = action_page.next_element.string
-                if action_not_blacklisted(BLACKLIST_ACTION_NAMES, action_name):
+                if check_not_blacklisted(BLACKLIST_ACTION_NAMES, action_name):
                     if not self._action_begins_attach(action_page, start_stages, page_reference_stages):
                         error_str = "Action doesn't start with Attach stage"
                         self.errors_list.append(error_as_dict(error_str, action_name))
@@ -1170,11 +1104,11 @@ class CheckActionStartWait(Consideration):
         start_stages = soup.find_all('stage', type='Start', recursive=False)
 
         # Wrapper Actions do not require an Attach as the first stage as each contained Action will have an Attach
-        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+        if metadata['object type'] != Constants.OBJECT_TYPES['wrapper']:
             # Iterate over all Actions in the Object
             for action_page in action_pages:
                 action_name = action_page.next_element.string
-                if action_not_blacklisted(BLACKLIST_ACTION_NAMES, action_name):
+                if check_not_blacklisted(BLACKLIST_ACTION_NAMES, action_name):
                     action_subsheet_id = action_page.get('subsheetid')
                     # Goes through all start stages in the Object
                     for start_stage in start_stages:
@@ -1273,7 +1207,7 @@ class CheckWaitNotArbitrary(Consideration):
             self._consideration_not_applicable()
             return
 
-        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+        if metadata['object type'] != Constants.OBJECT_TYPES['wrapper']:
             action_subsheets = None
             wait_stages = soup.find_all('stage', type='WaitStart', recursive=False)
             if wait_stages:
@@ -1315,7 +1249,7 @@ class CheckNavigateFollowedByWait(Consideration):
 
         This check is only applicable to normal base Objects.
         """
-        if metadata['object type'] == Settings.OBJECT_TYPES['base']:
+        if metadata['object type'] == Constants.OBJECT_TYPES['base']:
             action_subsheets = None
             navigate_stages = soup.find_all('stage', type='Navigate', recursive=False)
 
@@ -1325,7 +1259,7 @@ class CheckNavigateFollowedByWait(Consideration):
                 for navigate_stage in navigate_stages:
                     if navigate_stage.onsuccess is not None:
                         action_name = subsheetid_to_action(navigate_stage.subsheetid.string, action_subsheets)
-                        if action_not_blacklisted(self.ACTION_BLACKLIST, action_name):
+                        if check_not_blacklisted(self.ACTION_BLACKLIST, action_name):
                             current_stage = navigate_stage
                             # Keep going through success stages while they are Anchors
                             while True:
@@ -1402,7 +1336,7 @@ class CheckWaitTimeoutToException(Consideration):
     def __init__(self): super().__init__()
 
     def check_consideration(self, soup: BeautifulSoup, metadata):
-        if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+        if metadata['object type'] != Constants.OBJECT_TYPES['wrapper']:
             wait_end_stages = soup.find_all('stage', type='WaitEnd', recursive=False)
             exception_stages = soup.find_all('stage', type='Exception', recursive=False)
             end_stages = soup.find_all('stage', type='End', recursive=False)
@@ -1483,7 +1417,7 @@ class CheckActionsReusable(Consideration):
 
         def check_consideration(self, soup: BeautifulSoup, metadata):
             """Check to ensure a base Action uses only all reads, all writes or all navigates."""
-            if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+            if metadata['object type'] != Constants.OBJECT_TYPES['wrapper']:
                 NAVIGATE_ACTION_WHITELIST = ['DetachApplication', 'ActivateApp', 'AttachApplication']
 
                 read_subsheetids = []
@@ -1562,7 +1496,7 @@ class CheckActionsReusable(Consideration):
                     self.errors_list.append(error_as_dict(error_str, action_name))
 
             # Unable to check reusability of wrappers due to complexity
-            elif metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
+            elif metadata['object type'] == Constants.OBJECT_TYPES['wrapper']:
                 self._force_result(Result.NO, 0, 0)
 
 
@@ -1584,7 +1518,7 @@ class CheckObjectsNoBusinessLogic(Consideration):
 
         # Ensure there are no choice or decision stages in base Objects,
         # except for Attach and Detach Actions
-        if metadata['object type'] == Settings.OBJECT_TYPES['base']:
+        if metadata['object type'] == Constants.OBJECT_TYPES['base']:
             if choice_stages:
                 for choice_stage in choice_stages:
                     if not action_subsheets:
@@ -1616,7 +1550,7 @@ class CheckObjectsNoBusinessLogic(Consideration):
         # For wrapper Objects and Surface Automation Base Objects
         # ensure that any decision/choice stages are numerical comparisons or checking flags
         # Otherwise, may indicate business logic
-        elif metadata['object type'] != Settings.OBJECT_TYPES['base']:
+        elif metadata['object type'] != Constants.OBJECT_TYPES['base']:
             if choice_stages:
                 if not action_subsheets:
                     action_subsheets = get_action_subsheets(soup)
@@ -1763,7 +1697,7 @@ class CheckNoActionCalledInAction(Consideration):
         action_stages = soup.find_all('stage', type='Action', recursive=False)
 
         # Consideration not applicable to wrappers
-        if metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
+        if metadata['object type'] == Constants.OBJECT_TYPES['wrapper']:
             self._consideration_not_applicable()
 
         if action_stages:
@@ -1775,7 +1709,7 @@ class CheckNoActionCalledInAction(Consideration):
                     action_name = subsheetid_to_action(action_stage_subsheetid, action_subsheets)
                     error_str = "Action '{}' called in Object".format(action_stage.get('name'))
                     # Actions in the Base level are errors
-                    if metadata['object type'] == Settings.OBJECT_TYPES['base']:
+                    if metadata['object type'] == Constants.OBJECT_TYPES['base']:
                         self.errors_list.append(error_as_dict(error_str, action_name))
                     else:
                         # If its a Wrapper or Surface Automation Base, consideration is not applicable
@@ -1789,6 +1723,9 @@ class CheckNoActionCalledInAction(Consideration):
 class CheckNoOverlyComplexActions(Consideration):
     CONSIDERATION_NAME = "Checked there are no overly complex pages that could be broken up?"
     # Settings
+    WARNING_STAGES_PER_PAGE = 12
+    MAX_STAGES_PER_PAGE = 20
+
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 2
     INFREQUENTLY_HURDLE = 4
@@ -1812,14 +1749,14 @@ class CheckNoOverlyComplexActions(Consideration):
                         current_action_stages.append(stage)
 
             action_stages_count = len(current_action_stages)
-            if action_stages_count > Settings.MAX_STAGES_PER_PAGE:
+            if action_stages_count > self.MAX_STAGES_PER_PAGE:
                 error_str = "Action has more than {} stages ({})"\
-                    .format(Settings.MAX_STAGES_PER_PAGE, action_stages_count)
+                    .format(self.MAX_STAGES_PER_PAGE, action_stages_count)
                 self.errors_list.append(error_as_dict(error_str, action_name))
 
-            elif action_stages_count > Settings.WARNING_STAGES_PER_PAGE:
+            elif action_stages_count > self.WARNING_STAGES_PER_PAGE:
                 warning_str = "Action has more than {} stages ({})" \
-                    .format(Settings.WARNING_STAGES_PER_PAGE, action_stages_count)
+                    .format(self.WARNING_STAGES_PER_PAGE, action_stages_count)
                 self.warning_list.append(warning_as_dict(warning_str, action_name))
 
 
@@ -1850,6 +1787,9 @@ class CheckExceptionDetails(Consideration):
 class CheckExceptionAppropriateTypeDetail(Consideration):
     CONSIDERATION_NAME = "Do Exceptions provide appropriate Type and Detail?"
     # Settings
+    MIN_DETAIL_LENGTH = 10
+    WARNING_DETAIL_LENGTH = 25
+
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 1
     INFREQUENTLY_HURDLE = 4
@@ -1865,7 +1805,7 @@ class CheckExceptionAppropriateTypeDetail(Consideration):
         for exception_stage in exception_stages:
             # Exception is not a preserve
             if not exception_stage.get('usecurrent'):
-                if metadata['object type'] != Settings.OBJECT_TYPES['wrapper']:
+                if metadata['object type'] != Constants.OBJECT_TYPES['wrapper']:
                     # If Business Exception in a Base Object, mark as an error
                     if 'Business' in exception_stage.get('type'):
                         if not action_subsheets:
@@ -1878,8 +1818,8 @@ class CheckExceptionAppropriateTypeDetail(Consideration):
 
                 # If Exception detail length not adequate
                 detail_length = len(exception_stage.get('detail'))
-                # Flag an error
-                if detail_length < Settings.MIN_DETAIL_LENGTH:
+                if detail_length < self.MIN_DETAIL_LENGTH:
+                    # Flag an error
                     if not action_subsheets:
                         action_subsheets = get_action_subsheets(soup)
                     exception_name = exception_stage.parent.get('name')
@@ -1887,11 +1827,11 @@ class CheckExceptionAppropriateTypeDetail(Consideration):
                     parent_subsheet_id = exception_stage.parent.subsheetid.string
                     exception_page_name = subsheetid_to_action(parent_subsheet_id, action_subsheets)
                     error_str = "Exception '{}' has less than {} characters ({}) - {}" \
-                        .format(exception_name, Settings.MIN_DETAIL_LENGTH, detail_length, exception_detail)
+                        .format(exception_name, self.MIN_DETAIL_LENGTH, detail_length, exception_detail)
                     self.errors_list.append(error_as_dict(error_str, exception_page_name))
 
                 # Flag a Warning
-                elif detail_length < Settings.WARNING_DETAIL_LENGTH:
+                elif detail_length < self.WARNING_DETAIL_LENGTH:
                     if not action_subsheets:
                         action_subsheets = get_action_subsheets(soup)
                     exception_name = exception_stage.parent.get('name')
@@ -1899,7 +1839,7 @@ class CheckExceptionAppropriateTypeDetail(Consideration):
                     parent_subsheet_id = exception_stage.parent.subsheetid.string
                     exception_page_name = subsheetid_to_action(parent_subsheet_id, action_subsheets)
                     warning_str = "Exception '{}' has less than {} characters ({}) - {}"\
-                        .format(exception_name, Settings.WARNING_DETAIL_LENGTH, detail_length, exception_detail)
+                        .format(exception_name, self.WARNING_DETAIL_LENGTH, detail_length, exception_detail)
                     self.warning_list.append(warning_as_dict(warning_str, exception_page_name))
 
 
@@ -1955,7 +1895,7 @@ class CheckObjectsNotRecoverExceptions(Consideration):
 
         for recover_stage in recover_stages:
             # Flag a warning for Recovers in wrappers
-            if metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
+            if metadata['object type'] == Constants.OBJECT_TYPES['wrapper']:
                 if not action_subsheets:
                     action_subsheets = get_action_subsheets(soup)
                 action_subsheetid = recover_stage.subsheetid.string
@@ -1978,7 +1918,7 @@ class CheckObjectsNotRecoverExceptions(Consideration):
                         error_str = "Exception handling (Recover stage) in base Object"
                         self.errors_list.append(error_as_dict(error_str, action_name))
 
-        if metadata['object type'] == Settings.OBJECT_TYPES['wrapper']:
+        if metadata['object type'] == Constants.OBJECT_TYPES['wrapper']:
             # Consideration scoring not applicable to wrappers
             self._consideration_not_applicable()
 
@@ -2099,6 +2039,11 @@ class CheckImageDefinitionsEfficient(Consideration):
     """
     CONSIDERATION_NAME = "Are Target Images definitions efficient?"
     # Settings
+    WARNING_IMAGE_WIDTH = 180
+    WARNING_IMAGE_HEIGHT = 180
+    MAX_IMAGE_WIDTH = 250
+    MAX_IMAGE_HEIGHT = 250
+
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 2
     INFREQUENTLY_HURDLE = 3
@@ -2131,22 +2076,22 @@ class CheckImageDefinitionsEfficient(Consideration):
                                 break
 
                     # Flag error for image being too big
-                    if int(width) > Settings.MAX_IMAGE_WIDTH or int(height) > Settings.MAX_IMAGE_HEIGHT:
+                    if int(width) > self.MAX_IMAGE_WIDTH or int(height) > self.MAX_IMAGE_HEIGHT:
                         if not action_subsheets:
                             action_subsheets = get_action_subsheets(soup)
                         action_name = subsheetid_to_action(data_stage.subsheetid.string, action_subsheets)
                         error_str = "Data Item '{}' larger than recommended {} x {} ({} x {})"\
-                            .format(data_stage.get('name'), Settings.MAX_IMAGE_WIDTH, Settings.MAX_IMAGE_HEIGHT,
+                            .format(data_stage.get('name'), self.MAX_IMAGE_WIDTH, self.MAX_IMAGE_HEIGHT,
                                     height, width)
                         self.errors_list.append(error_as_dict(error_str, action_name))
 
                     # Flag warning for image being too big
-                    if int(width) > Settings.WARNING_IMAGE_WIDTH or int(height) > Settings.WARNING_IMAGE_HEIGHT:
+                    if int(width) > self.WARNING_IMAGE_WIDTH or int(height) > self.WARNING_IMAGE_HEIGHT:
                         if not action_subsheets:
                             action_subsheets = get_action_subsheets(soup)
                         action_name = subsheetid_to_action(data_stage.subsheetid.string, action_subsheets)
                         warning_str = "Data Item '{}' size above warning threshold {} x {} ({} x {})" \
-                            .format(data_stage.get('name'), Settings.WARNING_IMAGE_WIDTH, Settings.WARNING_IMAGE_HEIGHT,
+                            .format(data_stage.get('name'), self.WARNING_IMAGE_WIDTH, self.WARNING_IMAGE_HEIGHT,
                                     height, width)
                         self.errors_list.append(error_as_dict(warning_str, action_name))
 
@@ -2185,7 +2130,7 @@ class CheckFocusUsedForGlobals(Consideration):
                     subsheetid = step.parent.subsheetid.string
                     activate_app_subsheetids.append(subsheetid)
 
-                elif any(global_nav in step_name for global_nav in Settings.GLOBAL_NAV_STEPS):
+                elif any(global_nav in step_name for global_nav in Constants.GLOBAL_NAV_STEPS):
                     global_stage_found = True
                     subsheetid = step.parent.subsheetid.string
                     global_nav_subsheetids.append(subsheetid)
@@ -2199,7 +2144,7 @@ class CheckFocusUsedForGlobals(Consideration):
             steps = read_stage.find_all('step', recursive=False)
             for step in steps:
                 step_name = step.action.id.string
-                if any(global_read in step_name for global_read in Settings.GLOBAL_READ_STEPS):
+                if any(global_read in step_name for global_read in Constants.GLOBAL_READ_STEPS):
                     global_stage_found = True
                     subsheetid = step.parent.subsheetid.string
                     global_read_subsheetids.append(subsheetid)
@@ -2239,3 +2184,87 @@ class CheckFocusUsedForGlobals(Consideration):
 
         if not global_stage_found:
             self._consideration_not_applicable()
+
+
+# -------------------------------------------------- Utility functions
+def get_object_consideration_module_classes() -> list:
+    """
+    Return all consideration classes in this module as a list.
+
+    This list can later be iterated over and a instance of each class can easily be generated. This makes it agnostic of
+    how many considerations are contained in this module or their name.
+
+    :return: (list) Each element is a (name, value) tuple of a class in this module.
+    """
+    class_objects = []
+    clsmembers = inspect.getmembers(sys.modules[__name__], inspect.isclass)  # Returns name, value tuple
+    irrelevant_classes = ['Consideration', 'ReportPageHelper', 'Result', 'SoupStrainer', 'Sub_Soup', 'BeautifulSoup',
+                          'Tag']
+    for consideration_class in clsmembers:
+        if consideration_class[0] not in irrelevant_classes:
+            try:
+                consideration_class[1].CONSIDERATION_NAME
+            except AttributeError:
+                print(consideration_class[0] + " class does not have a consideration_name value")
+            else:
+                class_objects.append(consideration_class)
+
+    return class_objects
+
+
+def check_not_blacklisted(blacklist, check_str)->bool:
+    """
+    Check a name isn't contain with a blacklist of titles.
+
+    :param blacklist: (list) Blacklisted words (usually titles like Action names).
+    :param check_str: String that's check if it's in the blacklist
+    :return: (bool) True if check_str is not contained in the list.
+    """
+    check_str = check_str.lower()
+    if not any(blacklist_word.lower() in check_str for blacklist_word in blacklist):
+        return True
+    else:
+        return False
+
+
+def get_action_subsheets(object_soup: BeautifulSoup):
+    """
+    Return a list of tuples containing (subsheetid, subsheetname) for all Actions in a BP Object.
+
+    Subsheetname is the BP release XML equivalent of an Action name within a BP Object.
+
+    :param object_soup: (bs4) Soup of a single BP Object.
+    :return: (tuple) The (subsheetid, subsheetname) of all Actions within the BP Object.
+    """
+    subsheets = object_soup.find_all('subsheet', recursive=False)
+    subsheets_info = [(subsheet.get('subsheetid'), subsheet.next_element.string) for subsheet in subsheets]
+    return subsheets_info
+
+
+def get_onsuccess_tag(stage: Tag, object_soup: BeautifulSoup) -> Tag:
+    """
+    Return the BP stage that follows the current BP stage.
+
+    Useful for iterating through an Action if aiming to find a particular type of stage (i.e checking if one of the
+    following stages is of type 'Decision').
+
+    :param stage: (bs4.Tag) Tag of the current BP stage.
+    :param object_soup: (bs4) Soup of the full Object that the stage is contained within.
+    :return: (bs4.Tag) Tag of the following (onsuccess) stage.
+    """
+    if stage.onsuccess:
+        onsuccess = stage.onsuccess.string
+        success_stage = object_soup.find('stage', stageid=onsuccess, recursive=False)
+        return success_stage
+
+
+def subsheetid_to_action(stage_subsheetid, action_subsheets)->str:
+    """Return the containing Action's name from a stage's subsheetid.
+
+    action_subsheets will be the return value of the funtion get_action_subsheets().
+    """
+    for action_subsheet in action_subsheets:
+        action_subsheet_id = action_subsheet[0]
+        if action_subsheet_id == stage_subsheetid:
+            action_name = action_subsheet[1]
+            return action_name
