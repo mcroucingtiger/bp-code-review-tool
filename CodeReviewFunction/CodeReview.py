@@ -28,7 +28,6 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         logging.error("Unable to access request body")
         pass
 
-
     # Use the extracted XML to create the report
     if xml_string:
         sub_soups = SoupUtilities.extract_soups(xml_string)  # Parse the XML into multiple BeautifulSoup Objects
@@ -256,7 +255,7 @@ def make_report_object(soup_object, active_object_consideration_classes, metadat
         object_type_full = object_type
     metadata['object type'] = object_type
 
-    report_page = ReportPage('Object', current_object_name, object_type_full, object_actions)
+    report_page = ReportPage(current_object_name, 'Object', object_type_full, object_actions)
     logging.info("Running make_report_object function for " + report_page.page_name)
 
     blacklist_objects = metadata['blacklist']

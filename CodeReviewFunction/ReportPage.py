@@ -18,7 +18,7 @@ class ReportPage:
 
     """
 
-    def __init__(self, page_name, page_type, object_type=None, object_actions=None):
+    def __init__(self, page_name, page_type, object_type=None, object_actions=[]):
         self.considerations = []
         self.page_name = page_name
         self.page_type = page_type

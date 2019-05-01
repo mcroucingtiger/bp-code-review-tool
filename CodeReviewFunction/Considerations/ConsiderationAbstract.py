@@ -7,10 +7,10 @@ class Consideration(ABC):
     """Abstract class used as the parent to instantiate all consideration classes."""
     CONSIDERATION_NAME = "Override - Title from Report"
 
+    # Default values are for hard fail if any errors found
     PASS_HURDLE = 0
     FREQUENTLY_HURDLE = 0
     INFREQUENTLY_HURDLE = 0
-    # Default values will fail if any errors found (? what?)
 
     INFREQUENTLY_SCALE = 0.3
     FREQUENTLY_SCALE = 0.7
@@ -70,6 +70,8 @@ class Consideration(ABC):
 
     def _consideration_not_applicable(self):
         """Force the results for the consideration to 'Not Applicable'."""
+        # TODO: Change score from 0,0 to None, None and check correct BP accepts output
+        #  (assuming will cause the JArray issue again). This is needed for Capture.
         self._force_result(Result.NOT_APPLICABLE, 0, 0)
 
     def _force_result(self, result, score, max_score=None):
